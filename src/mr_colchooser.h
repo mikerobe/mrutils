@@ -305,7 +305,7 @@ class ColChooser {
         }
 
         void clearTargets();
-        void setTarget(int id, bool tf = true);
+        void setTarget(int id, bool tf = true, bool lock = true);
         inline int append(const char * str, int column = 0, bool lock = true) {
             if (column < 0 || column > nCols-1 || column > activeCol+1) return -1;
             if (lock) mrutils::mutexAcquire(mutex);

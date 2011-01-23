@@ -1155,8 +1155,8 @@ void ColChooser::clearTargets() {
     mrutils::mutexRelease(mutex);
 }
 
-void ColChooser::setTarget(int id, bool tf) {
-    mrutils::mutexAcquire(mutex);
+void ColChooser::setTarget(int id, bool tf, bool lock) {
+    if (lock) mrutils::mutexAcquire(mutex);
 
     if (id >= (int)targeted.size()) targeted.resize(id+1,false);
 
@@ -1185,7 +1185,7 @@ void ColChooser::setTarget(int id, bool tf) {
         }
     }
 
-    mrutils::mutexRelease(mutex);
+    if (lock) mrutils::mutexRelease(mutex);
 }
 
 void ColChooser::thaw() {

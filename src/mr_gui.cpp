@@ -84,7 +84,7 @@ namespace mrutils {
                     mrutils::SignalHandler::setSingleCharStdin(fileno(tty));
 
                     // have to manually set enviro vars for ncurses
-                    int slines, scols;
+                    int slines=0, scols=0;
                     mrutils::tty_getsize(&slines,&scols);
                     putenv(const_cast<char*>((const char*)(mrutils::stringstream().clear() << "LINES=" << slines)));
                     putenv(const_cast<char*>((const char*)(mrutils::stringstream().clear() << "COLUMNS=" << scols)));
