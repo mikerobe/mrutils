@@ -26,7 +26,10 @@ namespace mrutils {
             void addImg(const int imgId, const char * prefix = "", const int prefixLen = 0, const char * suffix = "", const int suffixLen = 0);
             inline int storeImg(mrutils::BufferedReader& reader);
 
-            void display(const char * const name = "", const char * const saveDir = "/Users/firmion/Desktop/", const char * const homeDir = "/Users/firmion/");
+            void display(const char * const name = "",
+                char const * const saveDir = "/Users/mikerobe/Desktop/",
+                char const * const homeDir = "/Users/mikerobe/"
+                );
             void clear(bool inclFns = true);
 
            /**
@@ -34,6 +37,17 @@ namespace mrutils {
             */
             typedef fastdelegate::FastDelegate0<bool> callFunc;
             inline void assignFunction(char c, callFunc callFn) { callFns.insert(c,callFn); }
+
+            /**
+             * Extended attributes are added to a file when saved on the
+             * mac.
+             */
+            inline void addXAttribute(char const * name, char const * value)
+            { xattributes.push_back(std::pair<std::string, std::string>(name, value)); }
+
+            inline void clearXAttributes()
+            { xattributes.clear(); }
+
 
         public:
             std::string searchStr;
@@ -68,6 +82,9 @@ namespace mrutils {
 
             std::list<imgdata_t> imgData;
             std::vector<mrutils::ImageDecode*> images;
+
+            typedef std::vector<std::pair<std::string, std::string> > xattributes_T;
+            xattributes_T xattributes;
             
             struct line_t {
                 const char * const prefix, * const suffix;

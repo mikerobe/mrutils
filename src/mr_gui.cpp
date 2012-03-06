@@ -11,14 +11,14 @@
 #include "mr_termutils.h"
 
 std::string mrutils::gui::termTitle = "xterm";
-MUTEX mrutils::gui::mutex = mrutils::mutexCreate();
+mrutils::mutex_t mrutils::gui::mutex = mrutils::mutexCreate();
 
 //int LINES = 24;
 //int COLS = 80;
 
 namespace {
     static bool init_ = false;
-    static MUTEX guiInitMutex = mrutils::mutexCreate();
+    static mrutils::mutex_t guiInitMutex = mrutils::mutexCreate();
     static FILE * tty = fopen("/dev/tty","r");
 
     void closeFunc() { endwin(); }

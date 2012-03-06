@@ -13,13 +13,14 @@ class GZipReader;
 
 class _API_ BufferedReader {
     public:
-    enum fileType {
-        FT_TXT
-       ,FT_STDIN
-       ,FT_GZ
-       ,FT_SOCKET
-       ,FT_RECV
-       ,FT_NONE
+    enum fileType
+    {
+        FT_TXT,
+        FT_STDIN,
+        FT_GZ,
+        FT_SOCKET,
+        FT_RECV,
+        FT_NONE
     };
 
     public:
@@ -147,8 +148,8 @@ class _API_ BufferedReader {
           */
         inline int read(const int size) {
             if (eob - pos >= size) {
-                line = pos; pos += size; 
-                return size; 
+                line = pos; pos += size;
+                return size;
             } else return readMore(size);
         }
 
@@ -161,6 +162,95 @@ class _API_ BufferedReader {
                 throw mrutils::ExceptionNoSuchData("mrutils::BufferedReader can't get data");
             } return *(T*)line;
         }
+
+        inline bool getNoThrow(char *dest)
+        {
+            typedef char T;
+            if (sizeof(T) != read(sizeof(T)))
+                return false;
+            memcpy(dest, line, sizeof(T));
+            return true;
+        }
+
+        inline bool getNoThrow(double *dest)
+        {
+            typedef double T;
+            if (sizeof(T) != read(sizeof(T)))
+                return false;
+            memcpy(dest, line, sizeof(T));
+            return true;
+        }
+
+        inline bool getNoThrow(int16_t *dest)
+        {
+            typedef int16_t T;
+            if (sizeof(T) != read(sizeof(T)))
+                return false;
+            memcpy(dest, line, sizeof(T));
+            *dest = ntohs(*dest);
+            return true;
+        }
+
+        inline bool getNoThrow(uint16_t *dest)
+        {
+            typedef uint16_t T;
+            if (sizeof(T) != read(sizeof(T)))
+                return false;
+            memcpy(dest, line, sizeof(T));
+            *dest = ntohs(*dest);
+            return true;
+        }
+
+        inline bool getNoThrow(int32_t *dest)
+        {
+            typedef int32_t T;
+            if (sizeof(T) != read(sizeof(T)))
+                return false;
+            memcpy(dest, line, sizeof(T));
+            *dest = ntohl(*dest);
+            return true;
+        }
+
+        inline bool getNoThrow(uint32_t *dest)
+        {
+            typedef uint32_t T;
+            if (sizeof(T) != read(sizeof(T)))
+                return false;
+            memcpy(dest, line, sizeof(T));
+            *dest = ntohl(*dest);
+            return true;
+        }
+
+        inline bool getNoThrow(int64_t *dest)
+        {
+            typedef int64_t T;
+            if (sizeof(T) != read(sizeof(T)))
+                return false;
+            uint32_t data1, data2;
+            memcpy(&data1, line, 4);
+            memcpy(&data2, line+4, 4);
+            *dest = (
+                    (((uint64_t)ntohl(data1)) << 32 )
+                    + (uint64_t)ntohl(data2)
+                    );
+            return true;
+        }
+
+        inline bool getNoThrow(uint64_t *dest)
+        {
+            typedef int64_t T;
+            if (sizeof(T) != read(sizeof(T)))
+                return false;
+            uint32_t data1, data2;
+            memcpy(&data1, line, 4);
+            memcpy(&data2, line+4, 4);
+            *dest = (
+                    (((uint64_t)ntohl(data1)) << 32 )
+                    + (uint64_t)ntohl(data2)
+                    );
+            return true;
+        }
+
 
        /**
         * getLine is a wrapper around nextLine that returns the line itself
@@ -235,7 +325,19 @@ class _API_ BufferedReader {
         bool suspend();
         inline bool suspended() const { return suspended_; }
         bool resume();
-        
+
+    public:
+       /******************
+        * Utilities
+        ******************/
+
+        /**
+          * Compares the full content of this file with the string.
+          * Note that this has the side-effect of retrieving the full
+          * content.
+          */
+        int cmp(char const *rhs, size_t len);
+
 
     private:
         int readMore(int size);
@@ -287,54 +389,76 @@ template<> inline double mrutils::BufferedReader::get<double>() throw (mrutils::
 
 template<> inline int16_t mrutils::BufferedReader::get<int16_t>() throw (mrutils::ExceptionNoSuchData) {
     if (sizeof(int16_t) != read(sizeof(int16_t))) { throw mrutils::ExceptionNoSuchData("mrutils::BufferedReader can't get data"); } 
-    int16_t t = *(int16_t*)line; t = ntohs(t);
+    int16_t t;
+    memcpy(&t, line, 2);
+    t = ntohs(t);
     return t;
 }
 
 template<> inline uint16_t mrutils::BufferedReader::get<uint16_t>() throw (mrutils::ExceptionNoSuchData) {
     if (sizeof(uint16_t) != read(sizeof(uint16_t))) { throw mrutils::ExceptionNoSuchData("mrutils::BufferedReader can't get data"); } 
-    uint16_t t = *(uint16_t*)line; t = ntohs(t);
+    uint16_t t;
+    memcpy(&t, line, 2);
+    t = ntohs(t);
     return t;
 }
 
 template<> inline int32_t mrutils::BufferedReader::get<int32_t>() throw (mrutils::ExceptionNoSuchData) {
     if (sizeof(int32_t) != read(sizeof(int32_t))) { throw mrutils::ExceptionNoSuchData("mrutils::BufferedReader can't get data"); } 
-    int32_t t = *(int32_t*)line; t = ntohl(t);
+    int32_t t;
+    memcpy(&t, line, 4);
+    t = ntohl(t);
     return t;
 }
 
 template<> inline uint32_t mrutils::BufferedReader::get<uint32_t>() throw (mrutils::ExceptionNoSuchData) {
     if (sizeof(uint32_t) != read(sizeof(uint32_t))) { throw mrutils::ExceptionNoSuchData("mrutils::BufferedReader can't get data"); } 
-    uint32_t t = *(uint32_t*)line; t = ntohl(t);
+    uint32_t t;
+    memcpy(&t, line, 4);
+    t = ntohl(t);
     return t;
 }
 
 template<> inline int64_t mrutils::BufferedReader::get<int64_t>() throw (mrutils::ExceptionNoSuchData) {
     if (sizeof(int64_t) != read(sizeof(int64_t))) { throw mrutils::ExceptionNoSuchData("mrutils::BufferedReader can't get data"); } 
-    #ifdef _BIG_ENDIAN
-        return (
-            ( ((uint64_t)(*(uint32_t*)(line+4))) << 32)
-            + (uint64_t)(*(uint32_t*)line);
+#ifdef _BIG_ENDIAN
+    uint32_t data1, data2;
+    memcpy(&data1, line, 4);
+    memcpy(&data2, line+4, 4);
+    return
+    ( ((uint64_t)(data2) << 32)
+     + (uint64_t)(data1)
+     );
+#else
+    uint32_t data1, data2;
+    memcpy(&data1, line, 4);
+    memcpy(&data2, line+4, 4);
+
+    return (
+            (((uint64_t)ntohl(data1)) << 32 )
+            + (uint64_t)ntohl(data2)
             );
-    #else 
-        return (
-             ( ((uint64_t)ntohl(*(uint32_t*)line)) << 32 )
-            + (uint64_t)ntohl(*(uint32_t*)(line+4))
-            );
-    #endif
+#endif
 }
 
 template<> inline uint64_t mrutils::BufferedReader::get<uint64_t>() throw (mrutils::ExceptionNoSuchData) {
     if (sizeof(uint64_t) != read(sizeof(uint64_t))) { throw mrutils::ExceptionNoSuchData("mrutils::BufferedReader can't get data"); } 
     #ifdef _BIG_ENDIAN
-        return (
-            ( ((uint64_t)(*(uint32_t*)(line+4))) << 32)
-            + (uint64_t)(*(uint32_t*)line);
+    uint32_t data1, data2;
+    memcpy(&data1, line, 4);
+    memcpy(&data2, line+4, 4);
+        return
+            ( ((uint64_t)(data2) << 32)
+            + (uint64_t)(data1)
             );
-    #else 
+    #else
+    uint32_t data1, data2;
+    memcpy(&data1, line, 4);
+    memcpy(&data2, line+4, 4);
+
         return (
-             ( ((uint64_t)ntohl(*(uint32_t*)line)) << 32 )
-            + (uint64_t)ntohl(*(uint32_t*)(line+4))
+             (((uint64_t)ntohl(data1)) << 32 )
+            + (uint64_t)ntohl(data2)
             );
     #endif
 }

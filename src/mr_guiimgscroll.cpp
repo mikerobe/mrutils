@@ -198,6 +198,23 @@ void mrutils::GuiImgScroll::display(const char * const name, const char * const 
                                     fputs(it->prefix,fp); fputs(it->suffix,fp); fputc('\n',fp);
                                 }
                                 fclose(fp);
+
+#                               ifdef __APPLE__
+                                for (xattributes_T::const_iterator itAttr = xattributes.begin();
+                                    itAttr != xattributes.end(); ++itAttr)
+                                {
+                                    std::pair<std::string, std::string> const& attr = *itAttr;
+
+                                    std::stringstream ss; ss << "\"" << attr.second << "\"";
+                                    std::string second = ss.str();
+                                    if (0 == fork() && 0 != execl("/usr/bin/xattr","xattr",
+                                                "-w",
+                                                attr.first.c_str(),
+                                                second.c_str(),
+                                                fs.path, NULL))
+                                        std::cerr << "Error calling xattr" << std::endl;
+                                }
+#                               endif
                             }
                         }
                     mrutils::mutexAcquire(gui::mutex);

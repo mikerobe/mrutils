@@ -48,8 +48,7 @@ class TermLine {
         **********************/
 
         void assignFunction(char c, BufferedTerm::callFunc callFn);
-        void assignSearch(char c, BufferedTerm::liveFunc liveFn, BufferedTerm::liveEndFunc endFn
-            ,char endChar = 0, bool skipChar = true, bool checkFns=false);
+        void assignSearch(char c, BufferedTerm::searchFunc const &);
 
     public:
        /**********************
@@ -64,7 +63,7 @@ class TermLine {
 
 
     private:
-        bool init_; 
+        bool init_;
         public: int winRows, winCols; private:
         public: void * win; private:
 

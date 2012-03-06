@@ -124,7 +124,7 @@ namespace mrutils {
     * IN THE LOCAL TIME ZONE
     * */
     int inline getDate() {
-        time_t now; time(&now); 
+        time_t now; time(&now);
         struct tm * timeinfo = localtime(&now);
         char str[9];strftime(str,9,"%Y%m%d",timeinfo);
         return atoi(str);

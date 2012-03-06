@@ -6,6 +6,7 @@
 #include "mr_numerical.h"
 #include "mr_strutils.h"
 #include "mr_curl.h"
+#include "mr_files.h"
 
 #include "mr_threads.h"
 
@@ -139,6 +140,180 @@ namespace {
     }
 }
 
+namespace {
+
+    std::string getDomain(std::string const &url)
+    {
+        char const * start = strstr(url.c_str(),"//");
+        if (!start)
+            start = url.c_str(); 
+
+        start += 2;
+        char const * end = strchr(start,'/');
+        if (!end)
+            end = start + strlen(start);
+
+        return url.substr(0, end-url.c_str());
+    }
+
+/**
+ * Translate a link (which may be relative or absolute) to an
+ * absolute link.
+ */
+std::string getLink(std::string const &pageURL, std::string const &link)
+{
+    if (link.empty())
+        return pageURL;
+
+    if (link[0] == '/')
+    {
+        return getDomain(pageURL) + link;
+    } else 
+    {
+        return link;
+    }
+}
+
+}
+
+/**
+ * strategy: search forward for first <xxx (not </xxx) that doesn't end in />
+ * set tagPtr to <xxx and return xxx
+ */
+char * mrutils::XML::nextTag()
+{
+	tagText[0] = '\0';
+
+	if (tagPtr == eob)
+		return tagText;
+
+	if (*tagPtr == '<')
+	{
+		if (tagPtr+1 == eob)
+			return tagText;
+
+		++tagPtr;
+	}
+
+	for (;;++tagPtr)
+	{
+		tagPtr = strchr(tagPtr,'<');
+
+		if (tagPtr == NULL || tagPtr+1 == eob)
+		{
+			tagPtr = eob;
+			return tagText;
+		}
+
+		if (*(tagPtr+1) == '/')
+			continue;
+
+		char * p = strchr(tagPtr,'>');
+
+		if (p == NULL)
+		{
+			tagPtr = eob;
+			return tagText;
+		}
+
+		if (*(p-1) == '/')
+			continue;
+
+		*strncpy(tagText,tagPtr+1,std::min((size_t)127,
+			strcspn(tagPtr+1,"> "))) = '\0';
+
+		return tagText;
+	}
+}
+
+bool mrutils::XML::next(char const *tagName)
+{
+	if (tagPtr == eob || tagPtr+1 == eob)
+	{
+		tagPtr = eob;
+		return false;
+	}
+
+	char start[128];
+	*start = '<';
+	*mrutils::strncpy(start+1,tagName,126) = 0;
+
+	for (;;++tagPtr)
+	{
+		tagPtr = mrutils::stristr(tagPtr,start);
+
+		if (tagPtr == NULL)
+		{
+			tagPtr = eob;
+			return false;
+		}
+
+		if (*(tagPtr+1) == '/')
+			continue;
+
+		char * p = strchr(tagPtr,'>');
+
+		if (p == NULL)
+			return false;
+
+		if (*(p-1) == '/')
+			continue;
+
+		return true;
+	}
+}
+
+void mrutils::XML::readFile(char const *path)
+{
+    int fd = open(path,O_RDONLY);
+    if (fd > 0)
+    {
+        char const *EOB = buffer + buffSz - 1;
+        for (int r; eob < EOB && 0 < (r = read(fd, eob, EOB-eob));)
+        { eob += r; }
+        *eob = '\0';
+        close(fd);
+    }
+}
+
+int mrutils::XML::get(mrutils::curl::urlRequest_t *request,
+        int stopFD, bool checkRedir)
+{
+    m_url = request->url;
+
+    mrutils::curl::curlData_t data;
+    data.buffSz = buffSz;
+    data.buffer = buffer;
+    data.eob = buffer;
+    data.errBuffer = NULL;
+
+    // DEBUG
+    //std::cerr << "XML getting url: " << request->url << std::endl;
+
+    if (int ret = mrutils::curl::getURL(request,data,stopFD))
+        return ret;
+
+    // check for javascript redirects
+    if (checkRedir) {
+        if (char *p = strstr(buffer,"meta http-equiv=\"refresh\"")) {
+            if (NULL != (p = strcasestr(p,"url="))) {
+                p += strlen("url=");
+                *strchr(p,'"') = '\0';
+                std::string newLink = getLink(m_url,p);
+                if (0!=strcasecmp(newLink.c_str(), m_url.c_str())) {
+                    mrutils::curl::urlRequest_t requestNew(*request);
+                    requestNew.url = const_cast<char*>(newLink.c_str());
+                    return get(&requestNew, stopFD, false);
+                }
+            }
+        }
+    }
+
+    m_url = request->url;
+
+    sob = tagPtr = buffer; eob = data.eob;
+    return 0;
+}
 char * mrutils::XML::unescapeHTML(char * start, char * end) {
     long size = end - start;
     char * dest = start;
@@ -146,8 +321,10 @@ char * mrutils::XML::unescapeHTML(char * start, char * end) {
     return dest;
 }
 
-const char * mrutils::XML::tagInternal(char * dest, int size_, std::string* str) {
-    if (str == NULL && size_ == 0) return dest;
+const char * mrutils::XML::tagInternal(char * dest, int size_, std::string* str)
+{
+    if (str == NULL && size_ == 0)
+		return dest;
 
     long size = (long)size_;
 
@@ -174,21 +351,29 @@ const char * mrutils::XML::tagInternal(char * dest, int size_, std::string* str)
     static const char * litEnd = "]]>";
     static const size_t litEndSz = strlen(litEnd);
 
-    for (;start != end;) {
+    for (;start != end;)
+	{
         char * lit = strstr(start,litStart);
 
-        if (lit == NULL) {
+        if (lit == NULL)
+		{
             parseCopy(dest,size,str,start,end);
             break;
-        } else {
+        }
+		else
+		{
             parseCopy(dest,size,str,start,lit);
 
             char * elit = strstr(lit, litEnd);
-            if (elit == NULL) {
+
+            if (elit == NULL)
+			{
                 //litCopy(dest,size,str,lit+litStartSz,end);
                 parseCopy(dest,size,str,lit+litStartSz,end);
                 break;
-            } else {
+            }
+			else
+			{
                 //litCopy(dest,size,str,lit+litStartSz,elit);
                 parseCopy(dest,size,str,lit+litStartSz,elit);
                 start = elit + litEndSz;

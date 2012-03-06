@@ -57,6 +57,13 @@ class _API_ ImageDecode {
             return (isJPG((uint8_t*)buffer) || isPNG((uint8_t*)buffer));
         }
 
+        static inline format_t getFormat(char const *buffer)
+        {
+            if (isJPG((uint8_t*)buffer)) return JPG;
+            if (isPNG((uint8_t*)buffer)) return PNG;
+            return AUTO;
+        }
+
         inline bool decode(mrutils::BufferedReader& reader
             ,format_t format = AUTO) {
             bool ret = false;
@@ -134,7 +141,7 @@ class _API_ ImageDecode {
         static bool isPNG(uint8_t * buffer);
         bool doRead8(mrutils::BufferedReader& reader);
 
-        MUTEX imgMutex;
+        mrutils::mutex_t imgMutex;
 };
 
 }

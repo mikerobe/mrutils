@@ -77,8 +77,9 @@ class _API_ FileCopyRecursive {
         inline int readlink(const char * src, char ** buffer, int size) {
             if (reader != NULL) {
                 // remote
-                writer->write("filereadlink ");
-                writer->writeLine(src); writer->flush();
+                writer->write("filereadlink ",strlen("filereadlink "));
+                *writer << src;
+                writer->flush();
                 if (!reader->nextLine()) return -1;
                 *buffer = reader->line;
                 return reader->strlen;

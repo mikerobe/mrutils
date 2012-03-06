@@ -1,5 +1,7 @@
 #include "mr_sockets.h"
 #include "mr_files.h"
+#include <pantheios/pantheios.hpp>
+#include <pantheios/inserters.hpp>
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__TOS_WIN__)
     #define EISCONN WSAEISCONN
@@ -44,8 +46,8 @@ bool mrutils::Socket::setBlocking(bool tf) {
         WSAData info; 
         int err = WSAStartup(MAKEWORD(2,0), &info);
         if (err != 0) {
-            fprintf(stderr,"WSAStartup had erro code: %d\n",err);
-            fflush(stderr);
+            pantheios::logprintf(pantheios::critical,
+                    "WSAStartup had erro code: %d\n",err);
         }
     } static bool initWSA_ = initWSA();
 #else
@@ -225,7 +227,8 @@ bool mrutils::Socket::initClient(const int seconds, const int stopFD) {
             // resolve host
             hostent *host = NULL;
             for (int i = 0; NULL == (host = gethostbyname(serverIP.c_str())); ++i) {
-                std::cerr << "Can't resolve host " << serverIP << std::endl; 
+                pantheios::log(pantheios::error,
+                    __PRETTY_FUNCTION__, " can't resolve host: ", serverIP);
                 if (i >= seconds) return (connected = false); 
 
                 // sleep 1 second
@@ -241,17 +244,23 @@ bool mrutils::Socket::initClient(const int seconds, const int stopFD) {
             // set nonblocking
             if (blocking) { ioctl(s_,FIONBIO,&one); setToBlock = true; blocking = false; }
 
-            for (int i = -1; i < seconds; ++i) {
-                if (0 > ::connect(s_, (sockaddr*)&addr, sizeof(sockaddr))) {
-                    switch (
+            for (int i = -1; i < seconds; ++i)
+            {
+                if (0 > ::connect(s_, (sockaddr*)&addr, sizeof(sockaddr)))
+                {
                     #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__TOS_WIN__)
-                        WSAGetLastError()
+                    switch (WSAGetLastError())
                     #else
-                        errno
+                    switch (errno)
                     #endif
-                    ) {
+                    {
                         case EISCONN:
-                            if (setToBlock) { ioctl(s_,FIONBIO,&zero); blocking = true; }
+                            if (setToBlock)
+                            {
+                                ioctl(s_,FIONBIO,&zero);
+                                blocking = true;
+                            }
+
                             return (connected = true);
 
                         case ETIMEDOUT:
@@ -362,7 +371,9 @@ bool mrutils::Socket::initClient(const int seconds, const int stopFD) {
 
         // check that GNUTLS is initialized
         if (!gcry_control (GCRYCTL_INITIALIZATION_FINISHED_P)) {
-            std::cerr << "GnuTLS must be initialized first by the application." << std::endl;
+            pantheios::log(pantheios::critical,
+                    __FILE__,":",pantheios::integer(__LINE__)," "
+                    "GnuTLS must be initialized first by the application.");
             return false;
         }
 
@@ -386,7 +397,10 @@ bool mrutils::Socket::initClient(const int seconds, const int stopFD) {
         ret = gnutls_priority_set_direct (session, (isSRP?"NORMAL:+SRP":"PERFORMANCE:!ARCFOUR-128"), &err);
         if (ret < 0) {
             if (ret == GNUTLS_E_INVALID_REQUEST) {
-                fprintf (stderr, "Syntax error at: %s\n", err);
+                pantheios::logprintf(pantheios::error,
+                        "%s %s:%d Syntax error at: %s\n",
+                        __PRETTY_FUNCTION__,
+                        __FILE__,__LINE__,err);
             }
             return false;
         }
@@ -394,7 +408,10 @@ bool mrutils::Socket::initClient(const int seconds, const int stopFD) {
         /* Protocol priorities */ 
         ret = gnutls_protocol_set_priority(session, priorityProtocols);
         if (ret < 0) {
-            printf("unable to set proto priority\n");
+            pantheios::logprintf(pantheios::error,
+                    "%s %s:%d unable to set proto priority: %d",
+                    __PRETTY_FUNCTION__,
+                    __FILE__,__LINE__,ret);
             return false;
         }
 
@@ -415,8 +432,11 @@ bool mrutils::Socket::initClient(const int seconds, const int stopFD) {
         /* Perform the TLS handshake */
         ret = gnutls_handshake (session);
         if (ret < 0) {
-            fprintf (stderr, "*** Handshake failed\n");
-            gnutls_perror (ret);
+            pantheios::logprintf(pantheios::error,
+                    "%s %s:%d handshake failed (%d): %s",
+                    __PRETTY_FUNCTION__,
+                    __FILE__,__LINE__,ret,
+                    gnutls_strerror(ret));
             return false;
         }
 

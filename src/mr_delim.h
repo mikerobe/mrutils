@@ -178,11 +178,12 @@ class _API_ DelimitedFileReader {
         /** by column name **/
         inline int findColumn(const char * name) throw(ExceptionNoSuchColumn) {
             if (!parsedColumns && !readColumns()) throw ExceptionNoSuchColumn(std::string("No columns in file") + lr.path);
-            mrutils::map<std::string, char **>::iterator const it = columns.find(name);
-            if (it == columns.end()) {
+
+            std::vector<std::string>::iterator it = std::find(colNames.begin(), colNames.end(), name);
+            if (it == colNames.end())
                 throw ExceptionNoSuchColumn(mrutils::stringstream().clear()
                     << "No such column '" << name << "' in file " << lr.path);
-            } return (it - columns.data);
+            return (it - colNames.begin());
         }
 
         inline char * getString(const char * name) throw(ExceptionNoSuchColumn) { 

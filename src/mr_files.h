@@ -220,6 +220,12 @@ namespace mrutils {
         return ret;
     }
 
+    /**
+     * Returns a string locating "to" relative to "from", both of which
+     * are assumed to be absolute paths.
+     */
+    std::string makeRelativePath(std::string const &to, std::string const &from);
+
     inline bool fileIsAbsPath(const char * path) {
         if (*path == '/' || *path == '\\') return true;
         if (*path == 0) return false;

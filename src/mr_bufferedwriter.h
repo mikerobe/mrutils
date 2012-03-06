@@ -1,237 +1,273 @@
-#ifndef MR_BUFFEREDWRITER_H
-#define MR_BUFFEREDWRITER_H
-
-#include "mr_sockets.h"
-#include "mr_files.h"
+#pragma once
+#include <fcntl.h>
+#include "mr_threads.h"
 #include "mr_except.h"
+
+#define restrict __restrict__
+#ifndef htonll
+    #ifdef _BIG_ENDIAN
+        #define htonull(x)   (x)
+        #define ntohull(x)   (x)
+        #define htonll(x)   (x)
+        #define ntohll(x)   (x)
+    #else
+        #define htonull(x)   ((((uint64_t)htonl(x)) << 32) + htonl(x >> 32))
+        #define ntohull(x)   ((((uint64_t)ntohl(x)) << 32) + ntohl(x >> 32))
+        #define htonll(x)   ((((int64_t)htonl(x)) << 32) + htonl(x >> 32))
+        #define ntohll(x)   ((((int64_t)ntohl(x)) << 32) + ntohl(x >> 32))
+    #endif
+#endif
 
 namespace mrutils {
 
-class _API_ BufferedWriter {
-    public:
-        BufferedWriter(const int bufSize = 32768)
-        : bufSize(bufSize)
-         ,socket(NULL)
-         ,fd(-1)
-         ,buffer(new char[bufSize])
-         ,EOB(buffer+bufSize)
-         ,eob(buffer)
-         ,waitSecs(-1)
-         ,selmax_(1), interruptFD(-1)
-         ,noAutoFlush(false)
+class _API_ BufferedWriter
+{
+    struct buffer
+    {
+        enum state
         {
-            buffers.push_back(buffer);
+            STATE_EMPTY,
+            STATE_IN_USE,
+            STATE_FULL
+        };
+
+        buffer(size_t capacity = 32768) :
+            m_next(NULL),
+            m_state(STATE_IN_USE),
+            m_size(0),
+            m_data(new char[capacity]),
+            m_capacity(capacity),
+            m_head(0),
+            m_tail(0)
+        {}
+
+        ~buffer()
+        {
+            delete[] m_data;
         }
 
-        ~BufferedWriter() {
-            flush(); close();
-            for (std::vector<char*>::iterator it = buffers.begin()
-                ;it != buffers.end(); ++it) delete[] *it;
-        }
-
-    public:
-       /******************
-        * Socket options
-        ******************/
-
-        /**
-          * Pass -1 to wait forever
-          */
-        inline void setSocketWaitTime(int seconds) 
-        { this->waitSecs = seconds; }
-
-        /**
-          * Whenever there is data to read on this 
-          * fd, will immediately return false on 
-          * any send requests.
-          */
-        inline void setSocketInterruptFD(int fd) { 
-            interruptFD = fd; 
-            if (fd >= selmax_) selmax_ = fd+1;
+        inline void reset()
+        {
+            m_next = NULL;
+            m_state = STATE_IN_USE;
+            m_size = 0;
+            m_head = m_tail = 0;
         }
 
         /**
-         * Set this option to require an explicit call to flush() to
-         * transmit data; the buffer size is then effectively unlimited
+         * writes as much as possible to the buffer,
+         * returning the amount written
          */
-        inline void setNoAutoFlush(bool tf = true) { 
-            if (tf == this->noAutoFlush) return;
-            if (!buffereobs.empty()) flush();
-            this->noAutoFlush = tf; 
-        }
+        size_t write(char const* restrict const data, size_t size);
 
-        inline bool use(Socket& socket) {
-            close();
-            this->socket = &socket;
-            selmax_ = 1 + (socket.s_>interruptFD?socket.s_:interruptFD);
-            return true;
-        }
+        enum fileResult
+        {
+            FILE_ERROR = -1,
+            FILE_FULL = 0,
+            FILE_COMPLETE = 1
+        };
 
-        inline bool open(const char * path) {
-            close();
-            return (0 < (fd = MR_OPENW(path)));
-        }
+        /**
+         * reads from the specified fd and returns the result type,
+         * modifying m_tail and m_size appropriately.
+         */
+        fileResult readFile(int const fd);
 
-    public:
-       /**************
-        * Writing data -- without exceptions
-        **************/
+        buffer *m_next;
+        volatile enum state m_state;
+        volatile int m_size;
 
-        inline bool flush() {
-            for (size_t i = 0; i < buffereobs.size(); ++i) 
-                if (!send(buffers[i],buffereobs[i])) return false;
-            if (!send(buffer,eob)) return false;
-            resetBuffers();
-            return true;
-        }
-
-        template <class T>
-        inline bool write(const T& elem) { return write((char*)&elem,sizeof(elem)); }
-        inline bool write(const char * const str) { return write(str,strlen(str)); }
-        inline bool write(const std::string& str) { return write(str.c_str(),str.size()); }
-        inline bool writeLine(const char * const str) { return write(str,strlen(str)+1); }
-        inline bool writeLine(char * const str) { return write(str,strlen(str)+1); }
-        inline bool writeLine(const std::string& str) { return write(str.c_str(),str.size()+1); }
-        inline bool write(const char * const str, const int size) {
-            if (size > EOB - eob) {
-                if (!flushOrExpand()) return false;
-                if (size > bufSize) return send(str,str+size);
-            } memcpy(eob,str,size); eob += size; return true;
-        }
-
-        inline bool write(const uint16_t e) { const uint16_t ep = htons(e);  return write((char*)&ep,2); }
-        inline bool write(const uint32_t e) { const uint32_t ep = htonl(e);  return write((char*)&ep,4); }
-        inline bool write(const uint64_t e) { const uint64_t ep = htonll(e); return write((char*)&ep,8); }
-        inline bool write(const  int16_t e) { const  int16_t ep = htons(e);  return write((char*)&ep,2); }
-        inline bool write(const  int32_t e) { const  int32_t ep = htonl(e);  return write((char*)&ep,4); }
-        inline bool write(const  int64_t e) { const  int64_t ep = htonll(e); return write((char*)&ep,8); }
-
-        inline bool writeFile(const char * path, int size) {
-            int fd = MR_OPEN(path,O_RDONLY|O_BINARY);
-            if (fd < 0) return false;
-
-            for (int r
-                ;size > 0
-                 && (EOB - eob >= 512 || flushOrExpand())
-                 && 0 < (r = MR_READ(fd,eob,EOB - eob))
-                ;size -= r, eob += r) ;
-            MR_CLOSE(fd);
-            return (size == 0);
-        }
-
-    public:
-       /**************
-        * Writing data -- WITH exceptions
-        **************/
-
-        template<class T>
-        inline friend mrutils::BufferedWriter& operator<<(mrutils::BufferedWriter& b, const T& elem) throw (mrutils::ExceptionNoSuchData) 
-        { b.put(elem); return b; }
-
-        inline friend mrutils::BufferedWriter& operator<<(mrutils::BufferedWriter& b, const std::string& elem) throw (mrutils::ExceptionNoSuchData)
-        { b.putLine(elem); return b; }
-
-        inline friend mrutils::BufferedWriter& operator<< (mrutils::BufferedWriter& b, const char* const elem) throw(mrutils::ExceptionNoSuchData)
-        { b.putLine(elem); return b; }
-
-        inline friend mrutils::BufferedWriter& operator<< (mrutils::BufferedWriter& b, char* const elem) throw(mrutils::ExceptionNoSuchData)
-        { b.putLine(elem); return b; }
-
-        template <class T>
-        inline void put(const T& elem) throw (mrutils::ExceptionNoSuchData) { put((char*)&elem,sizeof(elem)); }
-        inline void put(const char * const str) throw (mrutils::ExceptionNoSuchData) { put(str,strlen(str)); }
-        inline void put(const std::string& str) throw (mrutils::ExceptionNoSuchData) { put(str.c_str(),str.size()); }
-        inline void putLine(const char * const str) throw (mrutils::ExceptionNoSuchData) { put(str,strlen(str)+1); }
-        inline void putLine(char * const str) throw (mrutils::ExceptionNoSuchData) { put(str,strlen(str)+1); }
-        inline void putLine(const std::string& str) throw (mrutils::ExceptionNoSuchData) { put(str.c_str(),str.size()+1); }
-        inline void put(const char * const str, const int size) throw (mrutils::ExceptionNoSuchData) {
-            if (size > EOB - eob) {
-                if (!flushOrExpand()) { throw mrutils::ExceptionNoSuchData("BufferedWriter disconnected"); }
-                if (size > bufSize) {
-                    if (send(str,str+size)) { throw mrutils::ExceptionNoSuchData("BufferedWriter disconnected"); }
-                    return;
-                }
-            } memcpy(eob,str,size); eob += size;
-        }
-
-        inline void put(const uint16_t e) throw (mrutils::ExceptionNoSuchData) { const uint16_t ep = htons(e);  put((char*)&ep,2); }
-        inline void put(const uint32_t e) throw (mrutils::ExceptionNoSuchData) { const uint32_t ep = htonl(e);  put((char*)&ep,4); }
-        inline void put(const uint64_t e) throw (mrutils::ExceptionNoSuchData) { const uint64_t ep = htonll(e); put((char*)&ep,8); }
-        inline void put(const  int16_t e) throw (mrutils::ExceptionNoSuchData) { const  int16_t ep = htons(e);  put((char*)&ep,2); }
-        inline void put(const  int32_t e) throw (mrutils::ExceptionNoSuchData) { const  int32_t ep = htonl(e);  put((char*)&ep,4); }
-        inline void put(const  int64_t e) throw (mrutils::ExceptionNoSuchData) { const  int64_t ep = htonll(e); put((char*)&ep,8); }
-
-        inline void putFile(const char * path, int size) {
-            int fd = MR_OPEN(path,O_RDONLY|O_BINARY);
-            if (fd < 0) throw mrutils::ExceptionNoSuchData("BufferedWriter can't open file to put");
-
-            for (int r
-                ;size > 0
-                 && (EOB - eob >= 512 || flushOrExpand())
-                 && 0 < (r = MR_READ(fd,eob,EOB - eob))
-                ;size -= r, eob += r) ;
-            MR_CLOSE(fd);
-            if (size != 0) throw mrutils::ExceptionNoSuchData("BufferedWriter disconnected while putting file");
-        }
-
-    public:
-        const int bufSize;
-        mrutils::Socket * socket;
-        int fd;
+        char *m_data;
+        size_t const m_capacity;
+        size_t m_head, m_tail;
 
     private:
-        BufferedWriter(const BufferedWriter&);
-        BufferedWriter& operator=(const BufferedWriter&);
-
         /**
-         * clears all but the first buffer
+         * Helper of @see readFile.
          */
-        inline void resetBuffers() {
-            if (!buffereobs.empty()) {
-                for (std::vector<char*>::iterator it = buffers.begin()+1
-                    ;it != buffers.end(); ++it) delete[] *it;
-                buffers.resize(1); buffereobs.clear();
-                buffer = buffers[0];
-                EOB = buffer + bufSize;
-            }
+        fileResult readFileRight(int const fd, size_t rhs);
+    };
 
-            eob = buffer;
-        }
-        
-        inline void close() { 
-            if (fd != -1) { MR_CLOSE(fd); fd = -1; }
-            socket = NULL;
+    enum state
+    {
+        STATE_OK, //< read/write operations are OK
+        STATE_INVALID //< further output is invalid
+    };
 
-            resetBuffers();
+public:
+    enum mode
+    {
+        MODE_SYNC, //< synchronous, blocks when out of space
+        MODE_ASYNC //< asynchronous (writing on a separate thread), no blocking
+    };
 
-            FD_ZERO(&fdsread_); FD_ZERO(&fdswrite_);
-        }
+    BufferedWriter(size_t const capacity = 32768) :
+        m_mode(MODE_SYNC),
+        m_done(true),
+        m_state(STATE_OK),
+        m_head(new buffer(capacity)),
+        m_tail(m_head),
+        m_capacity(capacity),
+        m_fd(-1),
+        m_interruptFD(-1),
+        m_waitSeconds(-1)
+    {}
 
-        inline bool flushOrExpand() {
-            if (noAutoFlush) {
-                buffereobs.push_back(eob);
-                buffers.push_back(eob = buffer = new char[bufSize]);
-                EOB = buffer + bufSize;
-                return true;
-            } else return flush();
-        }
+    ~BufferedWriter()
+    {
+        try
+        {
+            finish();
+        } catch (mrutils::ExceptionNoSuchData const &)
+        {}
+    }
 
-        bool send(const char * start, const char * const end);
+    inline void setInterruptFD(int const interruptFD)
+    { m_interruptFD = interruptFD; }
 
-    private:
-        // current buffer
-        char * buffer;
-        const char * EOB;
-        char * eob; 
+    /**
+     * Max time in seconds to wait for write.
+     */
+    inline void setMaxWaitSecs(int waitSecs)
+    { m_waitSeconds = waitSecs; }
 
-        std::vector<char *> buffers;
-        std::vector<char *> buffereobs;
+    inline void clearInterruptFD()
+    { m_interruptFD = -1; }
 
-        int waitSecs;
-        TIMEVAL waitTime;
-        fd_set fdsread_; fd_set fdswrite_;
-        int selmax_,interruptFD;
-        bool noAutoFlush;
+    inline void setFD(int const fd)
+            throw (mrutils::ExceptionNoSuchData)
+    {
+        finish();
+        m_fd = fd;
+        start();
+    }
+
+    inline void setMode(enum mode const mode)
+            throw (mrutils::ExceptionNoSuchData)
+    {
+        if (m_mode == mode)
+            return;
+        finish();
+        m_mode = mode;
+        start();
+    }
+
+    void flush() throw (mrutils::ExceptionNoSuchData);
+
+    /**
+     * Thread function for asynchronous writes.
+     */
+    void writeThread();
+
+public: // functions for pushing data
+
+    void putFile(char const * const restrict path)
+            throw (mrutils::ExceptionNoSuchData);
+
+    void write(char const * restrict data, size_t size)
+            throw (mrutils::ExceptionNoSuchData);
+
+    template<typename T>
+    inline BufferedWriter& operator<<(T const &elem)
+            throw (mrutils::ExceptionNoSuchData)
+    {
+        write(reinterpret_cast<char const *>(&elem), sizeof(T));
+        return *this;
+    }
+
+    inline BufferedWriter& operator<<(std::string const &elem)
+            throw (mrutils::ExceptionNoSuchData)
+    {
+        write(elem.c_str(), elem.size()+1);
+        return *this;
+    }
+
+    inline BufferedWriter& operator<<(char * const elem)
+            throw (mrutils::ExceptionNoSuchData)
+    {
+        write(elem, strlen(elem)+1);
+        return *this;
+    }
+
+    inline BufferedWriter& operator<<(char const *const elem)
+            throw (mrutils::ExceptionNoSuchData)
+    {
+        write(elem, strlen(elem)+1);
+        return *this;
+    }
+
+#define X(X_TYPE, X_FUNC)\
+    inline BufferedWriter& operator<<(X_TYPE const elem)\
+            throw (mrutils::ExceptionNoSuchData)\
+    {\
+        X_TYPE const ep = X_FUNC(elem);\
+        write(reinterpret_cast<char const *>(&ep), sizeof(X_TYPE));\
+        return *this;\
+    }
+    X(uint16_t, htons)
+    X(int16_t, htons)
+    X(uint32_t, htonl)
+    X(int32_t, htonl)
+    X(uint64_t, htonll)
+    X(int64_t, htonll)
+#undef X
+
+private:
+    /**
+     * Removes tail buffers, sets m_head to m_tail.
+     */
+    void clearBuffers();
+
+    /**
+     * Checks if the m_head is empty and returns that (updating m_head)
+     * otherwise creates a new buffer and returns that
+     */
+    struct buffer * nextBuffer();
+
+    /**
+     * Writes the output from the head of buffer.
+     */
+    void pushOutput(struct buffer *buffer, size_t size)
+            throw (mrutils::ExceptionNoSuchData);
+
+    /**
+     * @see pushOutput helper. pushes only to the right hand side of
+     * buffer->m_head.
+     */
+    void pushRight(struct buffer *buffer, size_t size)
+            throw (mrutils::ExceptionNoSuchData);
+
+    /**
+     * Returns true if pushOutput can push data. False indicates that
+     * it's either timed out, been disconnected or been interrupted.
+     */
+    bool canPush() const;
+
+    /**
+     * joins the write thread
+     */
+    void finish() throw (mrutils::ExceptionNoSuchData);
+
+    /**
+     * launches the write thread
+     */
+    void start() throw (mrutils::ExceptionNoSuchData);
+
+
+private:
+    enum mode m_mode;
+    volatile bool m_done;
+    volatile enum state m_state;
+    struct buffer *m_head, *m_tail;
+    size_t const m_capacity;
+    int m_fd, m_interruptFD;
+    pthread_t m_writeThread;
+    pthread_attr_t m_writeThreadAttr;
+    int m_waitSeconds;
+
+private:
+    BufferedWriter(BufferedWriter const &);
+    BufferedWriter & operator=(BufferedWriter const &);
 };
+
 }
-#endif

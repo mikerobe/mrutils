@@ -11,22 +11,27 @@ using namespace mrutils;
 
 char ColChooser::spaces[256] = "                                                                                                                                                                                                                                                               ";
 
-ColChooser::ColChooser(int columns, int y0, int x0, int rows, int cols) 
-   : init_(false)
-    ,winRows((gui::init(),rows > 0?MIN_(rows,LINES) : LINES + rows))
-    ,winCols(cols > 0?MIN_(cols,COLS ) : COLS  + cols)
-    ,win((void*)newwin(winRows,winCols,y0,x0))
-    ,frozen(false)
-    ,optionsFn(NULL), optionsData(NULL)
-    ,selectionFn(NULL), selectionData(NULL)
-    ,targetFn(NULL), targetData(NULL)
-    ,searchFn(NULL), searchData(NULL)
-    ,activeCol(-1), nCols(columns)
-    ,mutex(mrutils::mutexCreate())
-    ,atrSelected(gui::ATR_SELECTED)
-    ,colSelected(gui::COL_SELECTED)
-    ,building(false), startIndex(0)
-    ,searchTargeted(false)
+ColChooser::ColChooser(int columns, int y0, int x0, int rows, int cols) :
+    winRows((gui::init(),rows > 0?MIN_(rows,LINES) : LINES + rows)),
+    winCols(cols > 0?MIN_(cols,COLS ) : COLS  + cols),
+    win((void*)newwin(winRows,winCols,y0,x0)),
+    activeCol(-1), nCols(columns),
+    mutex(mrutils::mutexCreate()),
+    init_(false),
+    frozen(false),
+    optionsFn(NULL),
+    optionsData(NULL),
+    selectionFn(NULL),
+    selectionData(NULL),
+    targetFn(NULL),
+    targetData(NULL),
+    searchFn(NULL),
+    searchData(NULL),
+    atrSelected(gui::ATR_SELECTED),
+    colSelected(gui::COL_SELECTED),
+    building(false),
+    startIndex(0),
+    searchTargeted(false)
     {
         this->cols.resize(nCols, Column(*this));
         for (int i = 0 ; i < nCols; ++i) this->cols[i].colNumber = i;
@@ -120,6 +125,42 @@ void ColChooser::Column::rebuild() {
     }
 }
 
+void ColChooser::Column::clear(bool inclEntries)
+{
+    cc.selected[colNumber] = -1;
+    searchTerm = 0;
+    searchTerms.clear();
+    headId = 0;
+    headNum = 0;
+    matchNum = -1;
+    tailId = -1;
+    startNum = matches.size();
+    searchTargeted = false;
+
+    if (inclEntries)
+    {
+        entries.clear();
+        matches.clear();
+        formatATR.clear();
+        formatCOL.clear();
+        colWidth = 0;
+        startNum = 0;
+    }
+}
+
+void ColChooser::Column::addEntry(std::string const &str)
+{
+    matches.push_back(entries.size());
+    entries.push_back(str);
+    colWidth = std::max(colWidth, (int)str.size() + (showNumbers?5:0));
+    formatATR.resize(entries.size(), gui::ATR_BLANK);
+    formatCOL.resize(entries.size(), gui::COL_BLANK);
+    if (cc.targeted.size() >= entries.size() && cc.targeted[entries.size()-1]) {
+        formatATR[entries.size()-1] = gui::ATR_TARGETED;
+        formatCOL[entries.size()-1] = gui::COL_TARGETED;
+    }
+}
+
 void ColChooser::Column::printEntry(int row, int id, bool clrSpaces) {
     if (clrSpaces) {
         if (colNumber == cc.nCols-1) {
@@ -190,7 +231,75 @@ void ColChooser::Column::nextRow() {
     }
 }
 
-void ColChooser::Column::prevRow() {
+bool ColChooser::Column::matchesSearch(const char * str)
+{
+    if (searchTargeted) return false;
+
+    // must match each string in searchTerms
+    for (searchTerms_t::iterator it = searchTerms.begin()
+        , itE = searchTerms.end(); it != itE; ++it)
+    {
+        if (! (it->m_invert ^ NULL != mrutils::stristr(str, it->c_str())))
+            return false;
+    }
+
+    // TODO how to handle new additions with search function
+
+    return true;
+}
+
+bool ColChooser::Column::matchesSearch(int id)
+{
+    if (searchTargeted && ((int)cc.targeted.size() <= id || !cc.targeted[id]))
+        return false;
+
+    const char * str = entries[id].c_str();
+
+    // must match each string in searchTerms
+    for (searchTerms_t::iterator it = searchTerms.begin()
+        , itE = searchTerms.end(); it != itE; ++it)
+    {
+        if (it->m_useFn && cc.searchFn)
+        {
+            if (!(it->m_invert ^ cc.searchFn(cc,id,it->c_str(),cc.searchData)))
+                return false;
+        } else
+        {
+            if (!(it->m_invert ^ NULL != mrutils::stristr(str, it->c_str())))
+                return false;
+        }
+    }
+
+    return true;
+}
+
+int ColChooser::Column::addMatches(int maxRows)
+{
+    int rows = 0;
+    if (direction > 0) {
+        for (int i = tailId + 1; rows < maxRows && i < (int)entries.size(); ++i)
+        {
+            if (matchesSearch(i))
+            {
+                matches.push_back(i); ++rows;
+            }
+        }
+    } else
+    {
+        for (int i = tailId - 1; rows < maxRows && i >= 0; --i)
+        {
+            if (matchesSearch(i))
+            {
+                matches[--startNum] = i; ++rows;
+            }
+        }
+    }
+
+    return rows;
+}
+
+void ColChooser::Column::prevRow()
+{
     if (entries.empty()) return;
 
     if (matchNum < 0) {
@@ -347,8 +456,6 @@ void ColChooser::Column::highlightTail() {
     }
 }
 
-
-
 int ColChooser::Column::appendEntry(const char * str) {
     entries.push_back(str);
     formatATR.resize(entries.size(), gui::ATR_BLANK);
@@ -464,21 +571,14 @@ int ColChooser::Column::appendEntry(const char * str) {
     return id;
 }
 
-void ColChooser::Column::search(const char * str, bool fn) {
-    if (str != NULL && str[0] != 0) {
-        if (fn) {
-            searchFnTerms.resize(searchFnTerm+1);
-            searchFnTerms[searchFnTerm] = str;
-        } else {
-            searchTerms.resize(searchTerm+1);
-            searchTerms[searchTerm] = str;
-        }
-    }
-
-    if (direction > 0) {
+void ColChooser::Column::search()
+{
+    if (direction > 0)
+    {
         matches.clear();
         tailId = -1;
-    } else {
+    } else
+    {
         matches.resize(entries.size());
         startNum = matches.size();
         tailId = matches.size();
@@ -489,14 +589,16 @@ void ColChooser::Column::search(const char * str, bool fn) {
 
     int rows = addMatches(cc.winRows);
 
-    if (rows > 0) {
+    if (rows > 0)
+    {
         matchNum = 0; 
         headId = match(0);
         tailId = match(rows-1);
 
         cc.selected[colNumber] = headId;
 
-        for (int i = 0; i < rows; ++i) {
+        for (int i = 0; i < rows; ++i)
+        {
             wmove((WINDOW*)cc.win, i, colStart);
             wclrtoeol((WINDOW*)cc.win);
             printEntry(i, match(i));
@@ -505,17 +607,19 @@ void ColChooser::Column::search(const char * str, bool fn) {
 
     cc.selectionChanged();
 
-    for (int i = rows; i < cc.winRows; ++i) {
+    for (int i = rows; i < cc.winRows; ++i)
+    {
         wmove((WINDOW*)cc.win,i,colStart);
         wclrtoeol((WINDOW*)cc.win);
     }
 
-    if (matchNum >= 0) cc.buildLastColumn();
+    if (matchNum >= 0)
+        cc.buildLastColumn();
 
-    if (!cc.frozen) {
-        mrutils::mutexAcquire(gui::mutex);
+    if (!cc.frozen)
+    {
+        mrutils::mutexScopeAcquire lock(gui::mutex);
         wrefresh((WINDOW*)cc.win);
-        mrutils::mutexRelease(gui::mutex);
     }
 }
 
@@ -1196,6 +1300,219 @@ void ColChooser::thaw() {
     touchwin((WINDOW*)win);
     wrefresh((WINDOW*)win);
     mrutils::mutexRelease(gui::mutex);
+}
+
+void ColChooser::setColor(int id, int ATR, int COL, int column,
+                bool lock)
+{
+    if (column < 0 || column > nCols-1) return;
+    if (lock) mrutils::mutexAcquire(mutex);
+        if (id >= 0) {
+            if (id+1 > (int)cols[column].formatATR.size()) {
+                cols[column].formatATR.resize(id+1,gui::ATR_BLANK);
+                cols[column].formatCOL.resize(id+1,gui::COL_BLANK);
+            }
+            if (cols[column].formatATR[id] != ATR 
+                || cols[column].formatCOL[id] != COL) {
+                cols[column].formatATR[id] = ATR;
+                cols[column].formatCOL[id] = COL;
+                cols[column].redraw(id);
+            }
+        }
+    if (lock) mrutils::mutexRelease(mutex);
+}
+
+int ColChooser::append(const char * str, int column, bool lock)
+{
+    if (column < 0 || column > nCols-1 || column > activeCol+1)
+        return -1;
+
+    if (lock)
+        mrutils::mutexAcquire(mutex);
+
+    const int id = cols[column].appendEntry(str);
+
+    if (lock)
+        mrutils::mutexRelease(mutex);
+
+    return id;
+}
+
+void ColChooser::redraw(int id, const char * str, int column)
+{
+    if (column < 0 || column > nCols-1)
+        return;
+
+    mrutils::mutexScopeAcquire lock(mutex);
+
+    if (id >= 0 && id < (int)cols[column].entries.size())
+    {
+        cols[column].entries[id] = str;
+        cols[column].redraw(id, true);
+    }
+}
+
+
+/** ColChooser search */
+//@{
+
+bool ColChooser::toggleSearchTargeted()
+{
+    mrutils::mutexScopeAcquire lock(mutex);
+
+    searchTargeted = !searchTargeted;
+
+    cols[activeCol].searchTargeted = searchTargeted;
+
+    if (activeCol == nCols-1)
+        cols[activeCol].search();
+
+    return true;
+}
+
+bool ColChooser::liveSearchEnd(bool keepSearch)
+{
+    mrutils::mutexScopeAcquire lock(mutex);
+
+    if (keepSearch)
+    {
+        if (activeCol >= 0)
+            ++cols[activeCol].searchTerm;
+
+    } else if ((int)cols[activeCol].searchTerms.size() == cols[activeCol].searchTerm+1)
+    {
+        cols[activeCol].searchTerms.pop_back();
+        cols[activeCol].search();
+    }
+
+    return true;
+}
+
+bool ColChooser::clearSearch()
+{
+    mrutils::mutexScopeAcquire lock(mutex);
+
+    if (activeCol >= 0)
+    {
+        cols[activeCol].searchTerms.clear();
+        cols[activeCol].searchTerm = 0;
+        cols[activeCol].search();
+    }
+
+    return true;
+}
+
+void ColChooser::lineSearch(Column::searchTerm_t const &search)
+{
+    mrutils::mutexScopeAcquire lock(mutex);
+
+    if (search.empty())
+        return;
+
+    char const *ids = search.c_str();
+
+    int id;
+    if (activeCol >= 0 && ids[0] != '\0'
+        && ((id = atoi(ids) - startIndex) >= 0))
+    {
+        cols[activeCol].highlight(id);
+    }
+}
+
+//@}
+
+bool ColChooser::toggleTarget()
+{
+    int id;
+    bool tf;
+
+    {
+        mrutils::mutexScopeAcquire lock(mutex);
+
+        if (activeCol != nCols-1 || cols[activeCol].matchNum < 0)
+            return true;
+
+        id = cols[activeCol].match(cols[activeCol].matchNum);
+
+        if ((int)targeted.size() < id+1)
+            targeted.resize(id+1,false);
+
+        tf = !targeted[id];
+    }
+
+    setTarget(id, tf);
+
+    if (targetFn != NULL)
+        targetFn(*this, id, tf, targetData);
+
+    return true;
+}
+
+void ColChooser::buildLastColumn()
+{
+    if (activeCol+1 == nCols)
+        return;
+
+    targeted.clear();
+    targets.clear();
+
+    if (activeCol >= 0)
+    {
+        cols[activeCol+1].colStart =
+            cols[activeCol].colStart +
+            cols[activeCol].colWidth + 1;
+    }
+
+    cols[activeCol+1].clear();
+
+    if (optionsFn != NULL)
+    {
+        optionsFn(*this, optionsData);
+        if (building)
+        {
+            std::string entry = builder.str();
+            builder.str("");
+            cols[activeCol+1].addEntry(entry);
+            building = false;
+        }
+    }
+
+    if (activeCol+1 == nCols-1)
+    {
+        targeted.resize(cols[activeCol+1].entries.size(), false);
+    }
+
+    cols[activeCol+1].rebuild();
+}
+
+void ColChooser::setDirectionUp(bool tf, int column)
+{
+    if (column < 0)
+    {
+        for (int i =0; i < nCols; ++i)
+            cols[i].direction = tf ? -1 : 1;
+    } else
+    {
+        if (column > nCols-1)
+            return;
+
+        cols[column].direction = tf ? -1 : 1;
+    }
+}
+
+void ColChooser::setShowNumbers(bool tf, int column)
+{
+    if (column < 0)
+    {
+        for (int i =0; i < nCols; ++i)
+            cols[i].showNumbers = tf;
+    } else
+    {
+        if (column > nCols-1)
+            return;
+
+        cols[column].showNumbers = tf;
+    }
 }
 
 #endif

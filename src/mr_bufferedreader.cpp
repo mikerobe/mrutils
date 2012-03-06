@@ -3,6 +3,9 @@
     #include "mr_gzipreader.h"
 #endif
 
+#include <pantheios/pantheios.hpp>
+#include <pantheios/inserters.hpp>
+
 
 // minimum amt to read at end of buffer for nextLine
 #define SOCKET_MIN_READ 32
@@ -85,7 +88,8 @@ bool mrutils::BufferedReader::open(const char * const path_, bool clearData) {
     switch (type) {
         case FT_GZ:
             #ifndef OK_OUTSIDE_LIBS
-                fprintf(stderr,"gzip not supported.\n");
+                pantheios::log(pantheios::critical,
+                    __PRETTY_FUNCTION__," gzip not supported");
                 type = FT_NONE;
                 return false;
             #else
@@ -132,7 +136,8 @@ bool mrutils::BufferedReader::suspend() {
             break;
     }
 
-    fprintf(stderr,"BufferedReader: Can't suspend receive type.\n");
+    pantheios::log(pantheios::critical,
+        __PRETTY_FUNCTION__," can't suspend receive type");
     return false;
 }
 
@@ -215,10 +220,20 @@ bool mrutils::BufferedReader::skipMore(int size) {
                         break;
                 }
 
-                if (ret <= 0) {
+                if (ret <= 0)
+                {
+                    if (ret < 0)
+                    {
+                        pantheios::logprintf(pantheios::error,
+                                "%s:%d socket read error %d (%s)",
+                                __FILE__, __LINE__, errno,
+                                strerror(errno));
+                    }
+
                     // no more data
                     return false;
                 }
+
                 if (ret >= dif) {
                     eob = buffer + ret;
                     pos = buffer + dif;
@@ -277,7 +292,20 @@ int mrutils::BufferedReader::nextLineSocketHelper(bool stripCR) {
             }
         }
 
-        if (ret <= 0) { strlen = 0; return -1; }
+        if (ret <= 0)
+        {
+            if (ret < 0)
+            {
+                pantheios::logprintf(pantheios::error,
+                        "%s:%d socket read error %d (%s)",
+                        __FILE__, __LINE__, errno,
+                        strerror(errno));
+            }
+
+            strlen = 0;
+            return -1;
+        }
+
         eob += ret;
 
         // search for \n or 0
@@ -312,8 +340,11 @@ bool mrutils::BufferedReader::fetchNextLine(bool stripCR) {
             eob += ret;
             CHECK_POS
 
-            if (eob >= EOB) {
-                fprintf(stderr,"Buffer overflow on mr_bufferedreader.cpp\n");
+            if (eob >= EOB)
+            {
+                pantheios::logprintf(pantheios::critical,
+                        "%s %s:%d buffer overflow (eob>=EOB)",
+                        __PRETTY_FUNCTION__,__FILE__,__LINE__);
                 strlen = 0; return false;
             } else {
                 if (eob == buffer) {
@@ -344,7 +375,9 @@ bool mrutils::BufferedReader::fetchNextLine(bool stripCR) {
 
                 // if here, found no \n in the whole buffer. then on last line
                 if (eob >= EOB) {
-                    fprintf(stderr,"Buffer overflow on mr_bufferedreader.cpp\n");
+                    pantheios::logprintf(pantheios::critical,
+                            "%s %s:%d buffer overflow (eob>=EOB)",
+                            __PRETTY_FUNCTION__,__FILE__,__LINE__);
                     strlen = 0; return false;
                 } else {
                     if (eob == buffer) {
@@ -373,7 +406,9 @@ bool mrutils::BufferedReader::fetchNextLine(bool stripCR) {
 
             // if here, found no \n in the whole buffer. then on last line
             if (eob >= EOB) {
-                fprintf(stderr,"Buffer overflow on mr_bufferedreader.cpp\n");
+                pantheios::logprintf(pantheios::critical,
+                        "%s %s:%d buffer overflow (eob>=EOB)",
+                        __PRETTY_FUNCTION__,__FILE__,__LINE__);
                 strlen = 0; return false;
             } else {
                 if (eob == buffer) {
@@ -400,7 +435,9 @@ bool mrutils::BufferedReader::fetchNextLine(bool stripCR) {
             ret = nextLineRecvHelper(stripCR);
             if (ret < 0) return false;
             if (ret > 0) return true;
-            fprintf(stderr,"Buffer overflower on mr_bufferedreader.cpp\n");
+            pantheios::logprintf(pantheios::critical,
+                    "%s %s:%d buffer overflow (eob>=EOB)",
+                    __PRETTY_FUNCTION__,__FILE__,__LINE__);
             return false;
         } break;
 
@@ -418,7 +455,9 @@ bool mrutils::BufferedReader::fetchNextLine(bool stripCR) {
             ret = nextLineSocketHelper(stripCR);
             if (ret < 0) return false;
             if (ret > 0) return true;
-            fprintf(stderr,"Buffer overflower on mr_bufferedreader.cpp\n");
+            pantheios::logprintf(pantheios::critical,
+                    "%s %s:%d buffer overflow (eob>=EOB)",
+                    __PRETTY_FUNCTION__,__FILE__,__LINE__);
             return false;
         } break;
     }
@@ -426,10 +465,17 @@ bool mrutils::BufferedReader::fetchNextLine(bool stripCR) {
     return false;
 }
 
-int mrutils::BufferedReader::readMore(int size) {
+int mrutils::BufferedReader::readMore(int size)
+{
     if (type == FT_NONE) return false;
     if (suspended_ && !resume()) return false;
-    if (size > bufSize) { std::cerr << "mrutils::BufferedReader can't read more than " << bufSize << std::endl; return false;} 
+    if (size > bufSize)
+    {
+        pantheios::log(pantheios::error,
+            __PRETTY_FUNCTION__, " can't read more than ",
+            pantheios::integer(bufSize));
+        return false;
+    }
 
     switch (type) {
         case FT_NONE:
@@ -483,10 +529,12 @@ int mrutils::BufferedReader::readMore(int size) {
         } break;
 
         case FT_RECV:
-        case FT_SOCKET: {
+        case FT_SOCKET:
+        {
             char * targetEnd = pos + size;
 
-            if ( targetEnd > EOB ) {
+            if (targetEnd > EOB)
+            {
                 // not enough buffer for block
                 // copy current stub to beginning
                 char * p = buffer;
@@ -507,25 +555,110 @@ int mrutils::BufferedReader::readMore(int size) {
                 default: // to prevent warning
                 case FT_SOCKET: {
                     do {
-                        int ret;
-                        if (waitSecs < 0) {
+                        int ret = 0;
+                        if (waitSecs < 0)
+                        {
                             FD_SET(socket->s_,&fds); if (interruptFD > 0) FD_SET(interruptFD,&fds); 
-                            if (0 >= select(selmax_, &fds,NULL,NULL,NULL)) return 0;
-                            if (interruptFD >= 0 && FD_ISSET(interruptFD,&fds)) return 0;
+                            if (int const ret = select(selmax_, &fds,NULL,NULL,NULL))
+                            {
+                                if (ret < 0)
+                                {
+                                    pantheios::logprintf(pantheios::error,
+                                        "%s:%d %s",
+                                        __FILE__, __LINE__, strerror(errno));
+                                    return 0;
+                                }
+                            } else
+                            {
+                                pantheios::log(pantheios::error,
+                                        __FILE__, ": ", pantheios::integer(__LINE__),
+                                        " select returned 0 with no wait...");
+                                return 0;
+                            }
+
+                            if (interruptFD >= 0 && FD_ISSET(interruptFD,&fds))
+                            {
+                                pantheios::log(pantheios::notice,
+                                        __FILE__, ": ", pantheios::integer(__LINE__),
+                                        " interrupted by interruptFD",
+                                        pantheios::integer(interruptFD));
+                                return 0;
+                            }
+
                             ret = socket->recv(eob, EOB - eob);
+
                         } else {
                             waitTime.tv_sec = waitSecs; waitTime.tv_usec = 0;
                             FD_SET(socket->s_,&fds); if (interruptFD > 0) FD_SET(interruptFD,&fds); 
-                            if (0 >= select(selmax_, &fds,NULL,NULL, &waitTime)) return 0;
-                            if (interruptFD >= 0 && FD_ISSET(interruptFD,&fds)) return 0;
+                            if (int const ret = select(selmax_, &fds,NULL,NULL,
+                                    &waitTime))
+                            {
+                                if (ret < 0)
+                                {
+                                    pantheios::log(pantheios::error,
+                                        __FILE__, pantheios::integer(__LINE__),
+                                        " ", strerror(errno));
+                                    return 0;
+                                }
+                            } else
+                            {
+                                pantheios::log(pantheios::error,
+                                    __FILE__, pantheios::integer(__LINE__),
+                                    " select timed out after ",
+                                    pantheios::integer(waitSecs), "seconds");
+                                return 0;
+                            }
+
+                            if (interruptFD >= 0 && FD_ISSET(interruptFD,&fds))
+                            {
+                                pantheios::log(pantheios::notice,
+                                        __FILE__, pantheios::integer(__LINE__),
+                                        " interrupted by interruptFD",
+                                        pantheios::integer(interruptFD));
+                                return 0;
+                            }
+
                             ret = socket->recv(eob, EOB - eob);
                         }
 
-                        if (ret <= 0) { line = pos; size = eob - pos; pos = eob; return size; }
+                        if (ret < 0)
+                        {
+                            pantheios::log(pantheios::error,
+                                __FILE__, pantheios::integer(__LINE__),
+                                " ", strerror(errno));
+                        }
+
+                        if (ret == 0)
+                        { // then peer has closed connection
+                            pantheios::log(pantheios::debug,
+                                __PRETTY_FUNCTION__,
+                                " recv disconnected with [",
+                                pantheios::integer(EOB-eob),
+                                "] remaining on buffer, [",
+                                pantheios::integer(targetEnd - eob),
+                                "] remaining to read of ",
+                                pantheios::integer(size));
+                            line = pos;
+                            size = eob - pos;
+                            pos = eob;
+                            return size;
+                        }
+
                         eob += ret;
+
+                        pantheios::log(pantheios::debug,
+                            __PRETTY_FUNCTION__,
+                            " got ", pantheios::integer(eob-pos),
+                            "/", pantheios::integer(size));
                     } while (eob < targetEnd);
                 } break;
             }
+
+
+
+            pantheios::log(pantheios::debug,
+                    __PRETTY_FUNCTION__,
+                    " done getting ", pantheios::integer(size));
 
             line = pos; pos += size;
             return size;
@@ -603,4 +736,24 @@ void mrutils::BufferedReader::switchBuffer(char * newBuffer) {
     if (!externalBuffer) free(buffer);
     buffer = newBuffer;
     externalBuffer = true;
+}
+
+
+int mrutils::BufferedReader::cmp(char const *rhs, size_t len)
+{
+    for (int r = 0; 0 < (r = readOnce(), read(r));)
+    {
+        for (char *p = line; p != line+r; ++p, ++rhs, --len)
+        {
+            if (len == 0)
+                return *p == 0 ? 0 : +1;
+
+            if (*p < *rhs)
+                return -1;
+            if (*p > *rhs)
+                return +1;
+        }
+    }
+
+    return 0;
 }

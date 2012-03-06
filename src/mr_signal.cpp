@@ -4,7 +4,7 @@ namespace mrutils {
 namespace SignalHandler {
 
     namespace {
-        MUTEX mutexStdin = mrutils::mutexCreate();
+        mrutils::mutex_t mutexStdin = mrutils::mutexCreate();
 
         ATOMIC_INT twiceKill = false;
         ATOMIC_INT called = false;

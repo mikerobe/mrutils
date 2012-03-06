@@ -6,7 +6,7 @@
 namespace mrutils {
     namespace packets {
 
-        template <class T> 
+        template <class T>
         inline char * baseconv(T num, int base) {
             static char retbuf[65];
             char *p;

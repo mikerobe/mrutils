@@ -84,6 +84,19 @@ std::string mrutils::formURL(const char * baseURL, const char * relative) {
     return result;
 }
 
+char* mrutils::copyMacToAscii(char * to, const int sz, const char * from, const bool stripCR) {
+    const char * const end = to + sz;
+
+    for (;to < end;) {
+        unsigned char c = (unsigned char)*from++;
+        if (c == 0x00) { *to = '\0'; return to; }
+        if (c < 0x7f) {
+            if (stripCR && c == 0x0d){}else *to++ = c;
+        } else {
+            *to++ = " AACENOUaaaaaaceeeeiiiinooooouuuut'cLS*PBRCT':\\A0-+<>YudEPpSaoOao?!-vf=D\"\". AAOAa--\"\"''/ yY/E<>fft*,,%AEAEEIIIIOOAOUUU1^~-       "[c - 0x7f];
+        }
+    } return to;
+}
 
 char* mrutils::copyToAscii(char * to, const int sz, const char * from, const bool stripCR) {
     unsigned char c, c2, c3;
@@ -206,6 +219,7 @@ char* mrutils::copyToAscii(char * to, const int sz, const char * from, const boo
                 switch (c) {
                     case 0xc2: 
                         switch (c2) {
+                            case 0xa0: *to++ = ' '; break;
                             case 0xa2: *to++ = 'c'; break;
                             case 0xa3: *to++ = 'L'; break;
                             case 0xa4: *to++ = 'o'; break;
@@ -910,6 +924,11 @@ char* mrutils::copyToWindowsLatin1(char * to, const int sz, const char * from, c
                                     case 0xb7: if (to < end-1) {*to++ = '`'; *to++ = '"';} else {*to = '\0'; return to;} break;
                                 }
                                 break;
+                            case 0x82:
+                                switch (c3) {
+                                    case 0xac: *to++ = 'E'; break;
+                                }
+                                break;
                         }
                         break;
                 }
@@ -979,7 +998,7 @@ char * mrutils::copyLatin1ToTerminal(char * to, const int sz, const char * from)
         if (c <= 0x7e || c >= 0xa0) { *to++ = c; continue; }
         switch (c) {
             case 0x7f: *to++ = ' '; continue;
-            case 0x80: *to++ = ' '; continue;
+            case 0x80: *to++ = 'E'; continue;
             case 0x81: *to++ = ' '; continue;
             case 0x82: *to++ = ','; continue;
             case 0x83: *to++ = 'f'; continue;

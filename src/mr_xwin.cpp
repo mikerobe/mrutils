@@ -3,12 +3,12 @@
 #include "mr_strutils.h"
 #include "mr_x.h"
 
-#define SAVE_PATH "/Users/firmion/Downloads/img."
+#define SAVE_PATH "/Users/mikerobe/Downloads/img."
 #define MASK ButtonPressMask | KeyPressMask | ResizeRedirectMask | ExposureMask | StructureNotifyMask
 
 namespace {
     static bool calledXlibThreads = false;
-    static MUTEX xlibThreadMutex = mrutils::mutexCreate();
+    static mrutils::mutex_t xlibThreadMutex = mrutils::mutexCreate();
 }
 
 mrutils::XWin::XWin()

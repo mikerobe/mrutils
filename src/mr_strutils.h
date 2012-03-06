@@ -13,6 +13,9 @@
 #include <stdlib.h>
 #include <climits>
 #include <string.h>
+#include <algorithM>
+#include <iterator>
+#include "mr_oprintf.h"
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__TOS_WIN__)
     #define snprintf _snprintf
@@ -21,7 +24,7 @@
 
 // compile-time strlen for string literals
 template<size_t N>
-inline size_t ctlen(const char (&)[N]) { return (N-1); }
+inline size_t ctlen(char const (&)[N]) { return (N-1); }
 
 namespace mrutils {
     // strcpy for string literals (length known at compile-time)
@@ -40,169 +43,18 @@ inline T sMIN(T a, T b) {
 	return (a < b? a: b);
 }
 
-#define OPCASE(i) case i: os << p##i; break;
-#define OPSWITCH1 OPCASE(0)
-#define OPSWITCH2 OPSWITCH1 OPCASE(1)
-#define OPSWITCH3 OPSWITCH2 OPCASE(2)
-#define OPSWITCH4 OPSWITCH3 OPCASE(3)
-#define OPSWITCH5 OPSWITCH4 OPCASE(4)
-#define OPSWITCH6 OPSWITCH5 OPCASE(5)
-#define OPSWITCH7 OPSWITCH6 OPCASE(6)
-#define OPSWITCH8 OPSWITCH7 OPCASE(7)
-#define OPSWITCH9 OPSWITCH8 OPCASE(8)
-#define OPSWITCH10 OPSWITCH9 OPCASE(9)
-#define OPSWITCH(c) switch (a) { OPSWITCH##c  }
-
-#define OPCASEW(i) case i: width = _oprintf_width(p##i); break;
-#define OPSWITCHW1 OPCASEW(0)
-#define OPSWITCHW2 OPSWITCHW1 OPCASEW(1)
-#define OPSWITCHW3 OPSWITCHW2 OPCASEW(2)
-#define OPSWITCHW4 OPSWITCHW3 OPCASEW(3)
-#define OPSWITCHW5 OPSWITCHW4 OPCASEW(4)
-#define OPSWITCHW6 OPSWITCHW5 OPCASEW(5)
-#define OPSWITCHW7 OPSWITCHW6 OPCASEW(6)
-#define OPSWITCHW8 OPSWITCHW7 OPCASEW(7)
-#define OPSWITCHW9 OPSWITCHW8 OPCASEW(8)
-#define OPSWITCHW10 OPSWITCHW9 OPCASEW(9)
-#define OPWIDTH(c) switch(a) { OPSWITCHW##c }
-
-#define OPrintf(argc)                                               \
-    const char * p = fmt, *q = fmt;                                 \
-    for (unsigned a = 0;a < argc;++q) {                             \
-        switch (*q) {                                               \
-            case 0:                                                 \
-                os.write(p,q-p);                                    \
-                return os;                                          \
-                                                                    \
-            case '%':                                               \
-            {                                                       \
-                if (*(q+1) == '%') {                                \
-                    os.write(p,q-p);                                \
-                    p = ++q; continue;                              \
-                }                                                   \
-                os.write(p,q-p);                                    \
-                                                                    \
-                int width = 0;                                      \
-                int precision = 6;                                  \
-                std::ios_base::fmtflags flags = os.flags();         \
-                char fill = ' ';                                    \
-                bool alternate = false;                             \
-                                                                    \
-                for (;;) {                                          \
-                    switch (*++q) {                                 \
-                        case '+':                                   \
-                            flags |= std::ios::showpos;             \
-                            continue;                               \
-                        case '-':                                   \
-                            flags |= std::ios::left;                \
-                            continue;                               \
-                        case '0':                                   \
-                            flags |= std::ios::internal;            \
-                            fill = '0';                             \
-                            continue;                               \
-                        case '#':                                   \
-                            alternate = true;                       \
-                            continue;                               \
-                        case '*':                                   \
-                            OPWIDTH(argc);                          \
-                            if (++a == argc) return os;             \
-                            continue;                               \
-                        default:                                    \
-                            break;                                  \
-                    }                                               \
-                    break;                                          \
-                }                                                   \
-                                                                    \
-                if (*q >= '0' && *q <= '9') {                       \
-                    width = atoi(q);                                \
-                    for (;*q >= '0' && *q <= '9';++q){}             \
-                }                                                   \
-                                                                    \
-                if (*q == '.') {                                    \
-                    precision = atoi(++q);                          \
-                    for (;*q >= '0' && *q <= '9';++q){}             \
-                }                                                   \
-                                                                    \
-                switch (*q) {                                       \
-                    case 'p':                                       \
-                    case 's':                                       \
-                    case 'c':                                       \
-                    case 'C':                                       \
-                        break;                                      \
-                                                                    \
-                    case 'i':                                       \
-                    case 'u':                                       \
-                    case 'd':                                       \
-                        flags |= std::ios::dec;                     \
-                        break;                                      \
-                                                                    \
-                    case 'f':                                       \
-                        flags |= std::ios::fixed;                   \
-                        if (alternate) flags |= std::ios::showpoint;\
-                        break;                                      \
-                                                                    \
-                    case 'E':                                       \
-                        flags |= std::ios::uppercase;               \
-                    case 'e':                                       \
-                        flags |= std::ios::scientific;              \
-                        if (alternate) flags |= std::ios::showpoint;\
-                        break;                                      \
-                                                                    \
-                    case 'X':                                       \
-                        flags |= std::ios::uppercase;               \
-                    case 'x':                                       \
-                    case 'o':                                       \
-                        flags |= std::ios::hex;                     \
-                        if (alternate) flags |= std::ios::showbase; \
-                        break;                                      \
-                                                                    \
-                    case 'G':                                       \
-                        flags |= std::ios::uppercase;               \
-                    case 'g':                                       \
-                        if (alternate) flags |= std::ios::showpoint;\
-                        break;                                      \
-                                                                    \
-                    default:                                        \
-                        OPSWITCH(argc)                              \
-                        ++a; p = q+1;                               \
-                        continue;                                   \
-                }                                                   \
-                                                                    \
-                os.unsetf(std::ios::adjustfield                     \
-                    | std::ios::basefield | std::ios::floatfield);  \
-                os.setf(flags);                                     \
-                os.width(width);                                    \
-                os.precision(precision);                            \
-                os.fill(fill);                                      \
-                                                                    \
-                OPSWITCH(argc)                                      \
-                ++a; p = q+1;                                       \
-                break;                                              \
-            }                                                       \
-                                                                    \
-            default: break;                                         \
-        }                                                           \
-    }                                                               \
-                                                                    \
-    os << p;                                                        \
-    return os;
-
-template<class C>
-inline int _oprintf_width(_UNUSED const C& param) { return 0; }
-template<>
-inline int _oprintf_width<int>(const int& param) { return param; }
-template<>
-inline int _oprintf_width<unsigned>(const unsigned& param) { return (int)param; }
-template<>
-inline int _oprintf_width<double>(const double& param) { return (int)param; }
-
-template<class P0>
-std::ostream& oprintf(std::ostream& os, const char * fmt, const P0& p0) 
-{ OPrintf(1); } 
-
-// etc. see bottom
-
 namespace mrutils {
+
+    template <typename Container>
+    void split(Container *dest, std::string const &str, char delim)
+    {
+        std::insert_iterator<Container> insert(*dest, dest->end());
+        std::istringstream ss(str);
+        for (std::string elem(32,'\0'); std::getline(ss, elem, delim);
+                *insert = elem, ++insert)
+        {}
+    }
+
 
     namespace formatting {
         _API_ std::ostream& formatCommas(std::ostream& os);
@@ -759,6 +611,7 @@ namespace mrutils {
             **********************/
 
             inline operator char const *() { return c_str(); }
+            inline operator std::string() { return str(); }
 
             inline const char * c_str() {
                 if (lastPos != tellp()) { string = std::ostringstream::str(); lastPos = tellp(); }
@@ -1084,6 +937,7 @@ namespace mrutils {
      * Replace quote will replace double quotes with two double quotes
      */
     _API_ char* copyToAscii(char * to, const int destSz, const char * from, const bool stripCR = false);
+    _API_ char* copyMacToAscii(char * to, const int destSz, const char * from, const bool stripCR = false);
     _API_ char* copyToWindowsLatin1(char * to, const int destSz, const char * from, const bool stripCR = false);
     _API_ char* copyLatin1ToTerminal(char * to, const int destSz, const char * from);
 
@@ -1196,7 +1050,8 @@ namespace mrutils {
         return str;
     }
 
-    inline char * strstrRev(char *h, const char *n, const char * beginning) {
+    template<typename T>
+    inline T * strstrRev(T *h, const char *n, const char * beginning) {
         if (*n == '\0') return h;
 
         size_t len = strlen(n);
@@ -1267,82 +1122,5 @@ namespace mrutils {
     inline stringstream& operator<< <unsigned long long>(stringstream& ss, const unsigned long long& elem) 
     { ss.operator<<(elem); return ss; }
 }
-
-template<class P0, class P1>
-std::ostream& oprintf(std::ostream& os, const char * fmt, const P0& p0, const P1& p1) 
-{ OPrintf(2); }
-
-template<class P0, class P1, class P2>
-std::ostream& oprintf(std::ostream& os, const char * fmt, const P0& p0, const P1& p1, const P2& p2) 
-{ OPrintf(3); }
-
-template<class P0, class P1, class P2, class P3>
-std::ostream& oprintf(std::ostream& os, const char * fmt, const P0& p0, const P1& p1, const P2& p2, const P3& p3) 
-{ OPrintf(4); }
-
-template<class P0, class P1, class P2, class P3, class P4>
-std::ostream& oprintf(std::ostream& os, const char * fmt, const P0& p0, const P1& p1, const P2& p2, const P3& p3, const P4& p4) 
-{ OPrintf(5); }
-
-template<class P0, class P1, class P2, class P3, class P4, class P5>
-std::ostream& oprintf(std::ostream& os, const char * fmt, const P0& p0, const P1& p1, const P2& p2, const P3& p3, const P4& p4, const P5& p5) 
-{ OPrintf(6); }
-
-template<class P0, class P1, class P2, class P3, class P4, class P5, class P6>
-std::ostream& oprintf(std::ostream& os, const char * fmt, const P0& p0, const P1& p1, const P2& p2, const P3& p3, const P4& p4, const P5& p5, const P6& p6) 
-{ OPrintf(7); }
-
-template<class P0, class P1, class P2, class P3, class P4, class P5, class P6, class P7>
-std::ostream& oprintf(std::ostream& os, const char * fmt, const P0& p0, const P1& p1, const P2& p2, const P3& p3, const P4& p4, const P5& p5, const P6& p6, const P7& p7) 
-{ OPrintf(8); }
-
-template<class P0, class P1, class P2, class P3, class P4, class P5, class P6, class P7, class P8>
-std::ostream& oprintf(std::ostream& os, const char * fmt, const P0& p0, const P1& p1, const P2& p2, const P3& p3, const P4& p4, const P5& p5, const P6& p6, const P7& p7, const P8& p8) 
-{ OPrintf(9); }
-
-template<class P0, class P1, class P2, class P3, class P4, class P5, class P6, class P7, class P8, class P9>
-std::ostream& oprintf(std::ostream& os, const char * fmt, const P0& p0, const P1& p1, const P2& p2, const P3& p3, const P4& p4, const P5& p5, const P6& p6, const P7& p7, const P8& p8, const P9& p9) 
-{ OPrintf(10); }
-
-template<class P0>
-mrutils::stringstream& oprintf(mrutils::stringstream& os, const char * fmt, const P0& p0) 
-{ OPrintf(1); } 
-
-template<class P0, class P1>
-mrutils::stringstream& oprintf(mrutils::stringstream& os, const char * fmt, const P0& p0, const P1& p1) 
-{ OPrintf(2); }
-
-template<class P0, class P1, class P2>
-mrutils::stringstream& oprintf(mrutils::stringstream& os, const char * fmt, const P0& p0, const P1& p1, const P2& p2) 
-{ OPrintf(3); }
-
-template<class P0, class P1, class P2, class P3>
-mrutils::stringstream& oprintf(mrutils::stringstream& os, const char * fmt, const P0& p0, const P1& p1, const P2& p2, const P3& p3) 
-{ OPrintf(4); }
-
-template<class P0, class P1, class P2, class P3, class P4>
-mrutils::stringstream& oprintf(mrutils::stringstream& os, const char * fmt, const P0& p0, const P1& p1, const P2& p2, const P3& p3, const P4& p4) 
-{ OPrintf(5); }
-
-template<class P0, class P1, class P2, class P3, class P4, class P5>
-mrutils::stringstream& oprintf(mrutils::stringstream& os, const char * fmt, const P0& p0, const P1& p1, const P2& p2, const P3& p3, const P4& p4, const P5& p5) 
-{ OPrintf(6); }
-
-template<class P0, class P1, class P2, class P3, class P4, class P5, class P6>
-mrutils::stringstream& oprintf(mrutils::stringstream& os, const char * fmt, const P0& p0, const P1& p1, const P2& p2, const P3& p3, const P4& p4, const P5& p5, const P6& p6) 
-{ OPrintf(7); }
-
-template<class P0, class P1, class P2, class P3, class P4, class P5, class P6, class P7>
-mrutils::stringstream& oprintf(mrutils::stringstream& os, const char * fmt, const P0& p0, const P1& p1, const P2& p2, const P3& p3, const P4& p4, const P5& p5, const P6& p6, const P7& p7) 
-{ OPrintf(8); }
-
-template<class P0, class P1, class P2, class P3, class P4, class P5, class P6, class P7, class P8>
-mrutils::stringstream& oprintf(mrutils::stringstream& os, const char * fmt, const P0& p0, const P1& p1, const P2& p2, const P3& p3, const P4& p4, const P5& p5, const P6& p6, const P7& p7, const P8& p8) 
-{ OPrintf(9); }
-
-template<class P0, class P1, class P2, class P3, class P4, class P5, class P6, class P7, class P8, class P9>
-mrutils::stringstream& oprintf(mrutils::stringstream& os, const char * fmt, const P0& p0, const P1& p1, const P2& p2, const P3& p3, const P4& p4, const P5& p5, const P6& p6, const P7& p7, const P8& p8, const P9& p9) 
-{ OPrintf(10); }
-
 
 #endif

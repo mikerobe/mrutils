@@ -1,10 +1,10 @@
 #include "mr_time.h"
 
 
-static MUTEX nextDayMapMutex = mrutils::mutexCreate();
+static mrutils::mutex_t nextDayMapMutex = mrutils::mutexCreate();
 static std::map<int,int> nextDayMap;
 
-static MUTEX prevDayMapMutex = mrutils::mutexCreate();
+static mrutils::mutex_t prevDayMapMutex = mrutils::mutexCreate();
 static std::map<int,int> prevDayMap;
 
 int mrutils::nextDay(int date) {
@@ -166,7 +166,7 @@ int mrutils::parseGuessDate(const char * date) {
 
         } else if (i > 1900) {
             // form is year month  day
-            
+
             const int m = parseMonth(p).month;
             if (m == 0) return 0;
 
@@ -187,14 +187,15 @@ int mrutils::parseGuessDate(const char * date) {
                 const int tmp = i; i = m.month; m.month = tmp;
             }
 
-            SKIPCHARS(p); 
+            SKIPCHARS(p);
             int y = 0; PARSEYEAR(y,p);
             return (y * 10000 + m.month * 100 + i);
         }
     } else {
         char const * p = date;
         month_t m = parseMonth(p,false);
-        if (m.month == 0) {
+        if (m.month == 0)
+        {
             for (;;++p) {
                 const char c = *p;
                 if (c == '\0') return 0;
@@ -203,12 +204,33 @@ int mrutils::parseGuessDate(const char * date) {
             }
             for (char c;'\0' != (c = *p);++p) if (c != ' ' && c != '\t') break;
             return parseGuessDate(p);
-        } else {
+        } else
+        {
             // form is month day year
             SKIPCHARS(p);
             int i = 0; PARSE2INT(i,p);
             SKIPCHARS(p);
-            int y = 0; PARSEYEAR(y,p);
+            int y = 0;
+
+            if (::isdigit(*p) && (p[1] == ':' || p[2] == ':'))
+            { // then probably a time followed by year at the end. search for 4 digits
+                for (;;)
+                {
+                    if (!*p)
+                        return 0;
+                    if (!::isdigit(*p))
+                        ++p;
+                    else if (!::isdigit(*(p+1)))
+                        p += 2;
+                    else if (!::isdigit(*(p+2)))
+                        p += 3;
+                    else if (!::isdigit(*(p+3)))
+                        p += 4;
+                    else
+                        break;
+                }
+            }
+            PARSEYEAR(y,p);
             return (y * 10000 + m.month * 100 + i);
         }
     }

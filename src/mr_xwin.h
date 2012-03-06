@@ -104,7 +104,7 @@ class _API_ XWin {
         mrutils::ImageDecode * saveImg;
         XImage * ximg; unsigned * ximgData;
 
-        MUTEX winMutex;
+        mutex_t winMutex;
         unsigned imgResizes;
 };
 

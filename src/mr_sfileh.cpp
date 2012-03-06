@@ -8,7 +8,7 @@ bool mrutils::SocketFileHandler::handleMessage(mrutils::BufferedReader & reader,
     if (!mrutils::startsWithI(reader.line,"file")) return false;
     reader.line += 4;
 
-    writer.use(*reader.socket);
+    writer.setFD(reader.socket->s_);
 
     if (0==mrutils::strnicmp(reader.line,"list ",5)) {
         const char * dir = reader.line + 5;
@@ -34,19 +34,19 @@ bool mrutils::SocketFileHandler::handleMessage(mrutils::BufferedReader & reader,
             if (MR_STAT(buffer,&s) != 0) continue;
 
             #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__TOS_WIN__)
-                writer.write(s.st_mode & S_IFDIR?'d':'f');
+                writer << (s.st_mode & S_IFDIR?'d':'f');
             #else
-                writer.write(s.st_mode & S_IFDIR?'d':dirp->d_type==DT_LNK?'l':'f');
+                writer << (s.st_mode & S_IFDIR?'d':dirp->d_type==DT_LNK?'l':'f');
             #endif
 
             // add the modification time
-            writer.write((unsigned)s.st_mtime);
+            writer << ((unsigned)s.st_mtime);
 
             // and the short path
-            writer.writeLine(dirp->d_name);
+            writer << dirp->d_name;
         }
 
-        writer.write('\0');
+        writer << '\0';
         writer.flush();
     } else if (0==mrutils::strnicmp(reader.line,"stat ",5)) {
         struct MR_STAT s;
@@ -59,12 +59,13 @@ bool mrutils::SocketFileHandler::handleMessage(mrutils::BufferedReader & reader,
         #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__TOS_WIN__)
             writer.write(s.st_mode & S_IFDIR?'d':'f');
         #else
-            if (s.st_mode & S_IFDIR) writer.write('d');
-            else if (0 < ::readlink(reader.line+5,buffer,sizeof(buffer))) writer.write('l');
-            else writer.write('f');
+            if (s.st_mode & S_IFDIR) writer << 'd';
+            else if (0 < ::readlink(reader.line+5,buffer,sizeof(buffer)))
+                writer << 'l';
+            else writer << 'f';
         #endif
 
-        writer.write((int)s.st_mtime);
+        writer << (int)s.st_mtime;
         writer.flush();
     } else if (0==mrutils::strnicmp(reader.line,"get ",4)) {
         reader.line -= 4;
@@ -84,8 +85,8 @@ bool mrutils::SocketFileHandler::handleMessage(mrutils::BufferedReader & reader,
 
             if (verboseOut != NULL) { fprintf(verboseOut,"writing file at %s...", path); fflush(verboseOut); }
             int size = (mrutils::fileExists(path)?mrutils::fileSize(path):0);
-            writer.write(size);
-            if (size > 0) writer.writeFile(path, size);
+            writer << size;
+            if (size > 0) writer.putFile(path);
             if (verboseOut != NULL) { fprintf(verboseOut,"done\n"); fflush(verboseOut); }
         }
 

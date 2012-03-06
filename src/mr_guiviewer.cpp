@@ -48,23 +48,43 @@ mrutils::GuiViewer::GuiViewer(int columns,int listRows,int y0, int x0, int rows,
         termLine.assignFunction('M',fastdelegate::MakeDelegate(&colChooser,
                     &mrutils::ColChooser::toggleSearchTargeted));
 
-        termLine.assignSearch('#'
-            ,fastdelegate::MakeDelegate(&colChooser,&mrutils::ColChooser::liveSearchFn)
-            ,fastdelegate::MakeDelegate(&colChooser,&mrutils::ColChooser::liveSearchFnEnd));
-        termLine.assignSearch('/'
-            ,fastdelegate::MakeDelegate(&colChooser,&mrutils::ColChooser::liveSearch)
-            ,fastdelegate::MakeDelegate(&colChooser,&mrutils::ColChooser::liveSearchEnd));
-        termLine.assignFunction('?',fastdelegate::MakeDelegate(&colChooser,
-                    &mrutils::ColChooser::clearSearch));
-        termLine.assignFunction(',',fastdelegate::MakeDelegate(&colChooser,
-                    &mrutils::ColChooser::clearSearch));
+        /** search functions */
+        //@{
 
-        for (int i = 0; i < 10; ++i) {
-            termLine.assignSearch('0' + i
-                    ,fastdelegate::MakeDelegate(&colChooser, &mrutils::ColChooser::lineSearch)
-                    ,fastdelegate::MakeDelegate(&colChooser, &mrutils::ColChooser::lineSearchEnd)
-                    ,'#',false,true);
+        mrutils::BufferedTerm::searchFunc search;
+        search.searchFn = fastdelegate::MakeDelegate(&colChooser,
+                &mrutils::ColChooser::liveSearch);
+        search.endFn = fastdelegate::MakeDelegate(&colChooser,
+                &mrutils::ColChooser::liveSearchEnd);
+
+        search.useFn = true;
+        termLine.assignSearch('#', search);
+        search.useFn = false;
+
+        termLine.assignSearch('/', search);
+
+        search.invert = true;
+        termLine.assignSearch('?', search);
+        search.invert = false;
+
+        // by line number
+        search.endChar = '#';
+        search.skipChar = false;
+        search.checkFns = true;
+        for (int i = 0; i < 10; ++i)
+        {
+            search.searchFn = fastdelegate::MakeDelegate(&colChooser,
+                    &mrutils::ColChooser::lineSearch);
+            search.endFn = fastdelegate::MakeDelegate(&colChooser,
+                    &mrutils::ColChooser::lineSearchEnd);
+            termLine.assignSearch('0' + i, search);
         }
+
+        //@}
+
+        termLine.assignFunction(',',
+                fastdelegate::MakeDelegate(&colChooser,
+                    &mrutils::ColChooser::clearSearch));
 
         termLine.assignFunction('q',fastdelegate::MakeDelegate(this,
                     &mrutils::GuiViewer::quit));

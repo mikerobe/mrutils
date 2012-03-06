@@ -194,7 +194,7 @@ bool mrutils::Encoder::encodeB64(
             
             blocksout++;
         }
-        if( blocksout >= ((int)lineLen/4) || isEOF ) {
+        if( (lineLen > 0 && blocksout >= ((int)lineLen/4)) || isEOF ) {
             if( blocksout ) {
                 PUTCHAR('\r');
                 PUTCHAR('\n');
@@ -212,7 +212,7 @@ void mrutils::Encoder::encodeB64To(mrutils::stringstream& ss, mrutils::BufferedR
     const int blocksPerLine = linelen / 4;
 
     for (int block = 0;;++block) {
-        if (block == blocksPerLine) { ss.write("\r\n",2); block = 0; }
+        if (blocksPerLine > 0 && block == blocksPerLine) { ss.write("\r\n",2); block = 0; }
 
         const int read = reader.read(3);
         uint8_t * in = (uint8_t*)reader.line;

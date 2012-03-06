@@ -54,14 +54,15 @@ namespace mrutils {
             }
 
             set(const set& other) 
-            : count(other.count), alloc(other.alloc)
+            : count(other.count)
              ,data((T*)malloc(sizeof(T)*other.alloc))
              ,tail(data+other.count), comp(other.comp)
+			 ,alloc(other.alloc)
             {
                 memcpy(data,other.data,sizeof(T)*other.count);
             }
 
-            inline set& operator=(const set& other) {
+            set& operator=(const set& other) {
                 if (this != &other) {
                     if (other.alloc > alloc) {
                         data = (T*)realloc(data,sizeof(T)*other.alloc);
@@ -80,7 +81,7 @@ namespace mrutils {
              * Generally this is used when the default constructor has
              * to be called first (for example with an array of sets)
              */
-            inline void resize(const int size) {
+            void resize(const int size) {
                 int oldAlloc = alloc; alloc = size;
                 data = (T*)realloc(data,alloc*sizeof(T));
                 tail = data + count;
@@ -97,10 +98,10 @@ namespace mrutils {
             typedef T* iterator;
             typedef const T* const_iterator;
 
-            inline iterator begin() const
+            iterator begin() const
             { return data; }
 
-            inline iterator end() const
+            iterator end() const
             { return tail; }
 
         public:
@@ -108,13 +109,13 @@ namespace mrutils {
             * Basic methods
             ***************/
 
-            inline T& operator[](int pos) 
+            T& operator[](int pos) 
             { return data[pos]; }
 
             /**
               * Returns an iterator to the element
               */
-            inline iterator insert(const T& elem) {
+            iterator insert(const T& elem) {
                 if (count == alloc) expand();
                 T* point = mrutils::lower_bound(data, count, elem, comp);
                 if (point != tail && !comp(elem,*point)) *point = elem;
@@ -124,7 +125,7 @@ namespace mrutils {
                 } return point;
             }
 
-            inline bool erase(const T& elem) {
+            bool erase(const T& elem) {
                 T* point = mrutils::lower_bound(data, count, elem, comp);
                 if (point == tail || comp(elem,*point)) return false;
                 mrutils::arrayErase(point, tail); 
@@ -135,14 +136,14 @@ namespace mrutils {
             /**
               * erase from start up to but not including end
               */
-            inline void erase(iterator start, iterator end) {
+            void erase(iterator start, iterator end) {
                 const int c = end - start; 
                 if (c == 0) return;
                 count -= c; tail -= c;
                 for (T* p = data, * pE = p + count;p != pE;) *p++ = *end++;
             }
 
-            inline iterator insert(iterator position, const T& elem) {
+            iterator insert(iterator position, const T& elem) {
                 int pos = position - data;
                 if (count == alloc) expand();
                 mrutils::arrayInsert(data + pos,tail,elem);
@@ -150,19 +151,19 @@ namespace mrutils {
                 return (data + pos);
             }
 
-            inline iterator erase(iterator it) {
+            iterator erase(iterator it) {
                 mrutils::arrayErase(it, tail); 
                 --count; --tail; return it;
             }
 
             template <class U>
-            inline bool contains(const U& elem) const {
+            bool contains(const U& elem) const {
                 iterator it = mrutils::lower_bound(data, count, elem, comp); 
                 return (it != tail && !comp(elem,*it));
             }
 
             template <class U>
-            inline iterator find(const U& elem) const { 
+            iterator find(const U& elem) const { 
                 iterator it = mrutils::lower_bound(data, count, elem, comp); 
                 if (it == tail || comp(elem,*it)) return tail; return it;
             }
@@ -176,7 +177,7 @@ namespace mrutils {
               * Elem must NOT be a reference to an entry in the array
               * -- make a copy or call update(point)
               */
-            inline void update(iterator& from, const T& elem) {
+            void update(iterator& from, const T& elem) {
                 iterator to = (
                     from+1 == tail
                     ?mrutils::lower_bound(data, count-1, elem, comp)
@@ -193,22 +194,22 @@ namespace mrutils {
                 else           for(;from!=to; --from) *from = *(from-1);
                 *to = elem;
             }
-            inline void update(iterator& point) {
+            void update(iterator& point) {
                 T elem = *point;
                 update(point,elem);
             }
 
-            inline void clear() 
+            void clear() 
             { count = 0; tail = data; }
 
-            inline bool empty() const
+            bool empty() const
             { return (count == 0); }
 
-            inline int size() const
+            int size() const
             { return count; }
 
         private:
-            inline void expand() {
+            void expand() {
                 fputs("warning: had to expand() an mrutils::set\n",stderr);
                 fflush(stderr);
                 int oldAlloc = alloc; alloc *= 2; 

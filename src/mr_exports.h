@@ -5,7 +5,7 @@
 // specific unused variables/functions
 #ifndef _UNUSED
     #ifdef __GNUC__
-        #define _UNUSED __attribute__ ((unused))
+        #define _UNUSED __attribute__((unused))
     #else
         #define _UNUSED
     #endif

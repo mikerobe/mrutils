@@ -288,7 +288,7 @@
                     case 155: // alt-left
                         MOVE_LEFT(1)
                         break;
-                    
+
                     case 77: // right arrow
                     case 116: // ctrl-right
                     case 157: // alt-right
@@ -323,7 +323,7 @@
                 }
 
                 break;
-                
+
             default:
                 mrutils::mutexAcquire(statusMutex);
                     if (eob == line) clearStatus();
@@ -348,39 +348,44 @@
     #define MR_ENDSEARCH \
         if (searchChar) { \
             searchChar = 0; \
-            searchIt->second.searchFn(&searchChar); \
+            mrutils::ColChooser::Column::searchTerm_t term;\
+            searchIt->second.searchFn(term); \
             if (!searchIt->second.endFn(false)) { \
                 fputc('\n',stdout); fflush(stdout); \
                 return false; \
             } \
         }
-    
+
     #define MR_SEARCH \
-        if (searchChar) { \
+        if (searchChar)\
+        { \
             *eob = '\0'; \
-            searchIt->second.searchFn(line+searchIt->second.skipChar); \
+            mrutils::ColChooser::Column::searchTerm_t term( \
+                    line+searchIt->second.skipChar);\
+            searchIt->second.setupTerm(&term);\
+            searchIt->second.searchFn(term);\
         }
     #define MR_ATSTART \
         if (gotMutex) {\
             writeStatus();\
             gotMutex = false;\
             mrutils::mutexRelease(writeMutex);\
-        } 
-    
+        }
+
     void mrutils::BufferedTerm::setToFile(bool tf) {
         if (filePath.empty()) return;
         if (tf == this->pipeToFile) return;
-    
+
         fflush(stdout);
-    
+
         if (tf) {
             oldStdoutFD = dup(fileno(stdout));
-    
+
             if (NULL == freopen(filePath.c_str(), (append?"a+":"w"), stdout)) {
                 std::cerr << "Error opening " << filePath << std::endl;
                 return;
             }
-    
+
             oldStdout = fdopen( oldStdoutFD, "w" );
             append = true;
         } else {
@@ -456,34 +461,58 @@
         fflush(stdout);
     }
     
-    bool mrutils::BufferedTerm::parseChar(int c) {
+    bool mrutils::BufferedTerm::parseChar(int c)
+    {
         if (checkFns && (
-                (callIt = callFns.find(c)) != callFns.end()
-                || (searchChar == 0 && (((searchIt = searchFns.find(c)) != searchFns.end())?(searchChar=searchIt->second.endChar):false))
-                        )
-           ) {
-            if (callIt == callFns.end()) {
+            (callIt = callFns.find(c)) != callFns.end()
+            || (searchChar == 0 && (((searchIt = searchFns.find(c)) != searchFns.end())?(searchChar=searchIt->second.endChar):false))
+            )
+           )
+        {
+            if (callIt == callFns.end())
+            {
                 checkFns = searchIt->second.checkFns;
-                fputc(c,stdout); fflush(stdout);
-                *p++ = c; ++eob;
-                if (!searchIt->second.skipChar) {
-                    *eob = '\0'; searchIt->second.searchFn(line);
+                fputc(c,stdout);
+                fflush(stdout);
+                *p++ = c;
+                ++eob;
+
+                if (!searchIt->second.skipChar)
+                {
+                    *eob = '\0';
+                    mrutils::ColChooser::Column::searchTerm_t term(line);
+                    searchIt->second.setupTerm(&term);
+                    searchIt->second.searchFn(term);
                 }
-            } else {
-                if (searchChar) {
+            } else
+            {
+                if (searchChar)
+                {
                     checkFns = true;
                     searchChar = 0;
-                    fputc(c,stdout); fputc('\n',stdout); fflush(stdout);
-                    p = line; eob = p; *eob = '\0';
-                    if (!searchIt->second.endFn(true)) return false;
+                    fputc(c,stdout);
+                    fputc('\n',stdout);
+                    fflush(stdout);
+                    p = line;
+                    eob = p;
+                    *eob = '\0';
+
+                    if (!searchIt->second.endFn(true))
+                        return false;
                 }
-                if (!callIt->second()) {
+
+                if (!callIt->second())
+                {
                     fputc('\n',stdout); fflush(stdout);
                     return false;
-                } return true;
+                }
+
+                return true;
             }
-        } else {
-            if (c == searchChar) {
+        } else
+        {
+            if (c == searchChar)
+            {
                 checkFns = true;
                 searchChar = 0;
                 fputc(c,stdout); fputc('\n',stdout); fflush(stdout);
@@ -491,7 +520,8 @@
                 return searchIt->second.endFn(true);
             } 
 
-            switch (c) {
+            switch (c)
+            {
                 case 13:
                 case 10: // return
                     fputc('\n',stdout); fflush(stdout);
@@ -595,11 +625,16 @@
                     break;
                 case C_K:
                     clearToEOL();
-                    if (p == line) {
+                    if (p == line)
+                    {
                         checkFns = true;
                         MR_ATSTART
                         MR_ENDSEARCH
-                    } else MR_SEARCH
+                    } else
+                    {
+                        MR_SEARCH
+                    }
+
                     fflush(stdout);
                     eob = p;
                     break;
@@ -623,7 +658,7 @@
                         moveCursor(p - q);
                         fflush(stdout);
                     } break;
-                
+
                 case C_D:
                     {
                         if (p == eob) break;
@@ -632,14 +667,19 @@
                         clearToEOL(); *eob = '\0';
                         fputs(p,stdout);
                         moveCursor(p-eob);
-                        if (p == line && eob == line) {
+                        if (p == line && eob == line)
+                        {
                             checkFns = true;
                             MR_ATSTART
                             MR_ENDSEARCH
-                        } else MR_SEARCH
+                        } else
+                        {
+                            MR_SEARCH
+                        }
+
                         fflush(stdout);
                     } break;
-    
+
                 case M_D:
                     {
                         if (p == eob) break;
@@ -652,50 +692,58 @@
                         eob += (p - q); *eob = '\0';
                         fputs(p,stdout);
                         moveCursor(p-eob);
-                        if (p == line && eob == line) {
+                        if (p == line && eob == line)
+                        {
                             checkFns = true;
                             MR_ATSTART
                             MR_ENDSEARCH
-                        } else MR_SEARCH
+                        } else
+                        {
+                            MR_SEARCH
+                        }
                         fflush(stdout);
-    
+
                     } break;
-    
+
                 case C_W:
                 case C_DELWRD:
                     {
                         bool offset = searchChar&&searchIt->second.skipChar;
                         if (p == line+offset) break; 
-    
+
                         char * q = p; --p;
                         while (*p == ' ' && p > line+offset) --p;
                         // the '/' is for paths
                         if (*p == '/') --p;
                         while (*p != ' ' && *p != '/' && p > line+offset) --p;
                         if (p > line+offset) ++p;
-    
+
                         moveCursor(p-q);
                         clearToEOL();
-    
+
                         char * u = q; char * v = p;
                         while (u < eob) *v++ = *u++;
                         eob += (p - q); *eob = '\0';
                         fputs(p,stdout);
                         moveCursor(p-eob);
-                        if (p == line && eob == line) {
+                        if (p == line && eob == line)
+                        {
                             checkFns = true;
                             MR_ATSTART
                             MR_ENDSEARCH
-                        } else MR_SEARCH
+                        } else
+                        {
+                            MR_SEARCH
+                        }
                         fflush(stdout);
                     } break;
                 case C_PREV:
                     {
                         if (fromTail+1 > (int)history.size()) 
                             break;
-    
+
                         MR_ENDSEARCH
-    
+
                         moveCursor(line-p);
                         clearToEOL();
                         p = mrutils::strcpy(line, 
@@ -704,11 +752,11 @@
                         while (q != p) fputc(*q++, stdout);
                         fflush(stdout);
                         eob = p;
-                    } break;  
+                    } break;
                 case C_NEXT:
                     {
                         MR_ENDSEARCH
-    
+
                         moveCursor(line-p);
                         clearToEOL();
                         fromTail -= 2;
@@ -724,23 +772,28 @@
                         }
                         eob = p;
                     } break;  
-    
+
                 case 127:
                 case C_DEL:
-                    if (p > line) {
+                    if (p > line)
+                    {
                         char * q = --p; --eob;
                         while (q < eob) { *q = *(q+1); ++q; }
                         *eob = '\0';
-    
+
                         moveCursor(-1);
                         clearToEOL();
                         fputs(p,stdout);
                         moveCursor(p - eob);
-                        if (p == line && eob == line) {
+                        if (p == line && eob == line)
+                        {
                             checkFns = true;
                             MR_ATSTART
                             MR_ENDSEARCH
-                        } else MR_SEARCH
+                        } else
+                        {
+                            MR_SEARCH
+                        }
                         fflush(stdout);
                     }
                     break;
@@ -758,13 +811,13 @@
                 default:
                     if (eob == EOB) break;
                     checkFns = false;
-    
+
                     if (!gotMutex) {
                         mrutils::mutexAcquire(writeMutex);
                         if (smartTerm) clearToEOL();
                         gotMutex = true;
                     }
-    
+
                     if (p == eob) {
                         //if (!status.empty()) clearToEOL(); // clear status
                         if (smartTerm) { fputc(c,stdout); fflush(stdout); }
@@ -778,11 +831,19 @@
                         moveCursor(++p - eob);
                         fflush(stdout);
                     }
-    
+
                     MR_SEARCH
             }
         }
-    
+
         return true;
     }
+
+void mrutils::BufferedTerm::searchFunc::setupTerm(
+        mrutils::ColChooser::Column::searchTerm_t *term)
+{
+    term->m_invert = invert;
+    term->m_useFn = useFn;
+}
+
 #endif

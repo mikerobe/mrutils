@@ -55,7 +55,7 @@ class GuiList {
         void * win;
         bool frozen;
 
-        public: MUTEX mutex; private:
+        public: mrutils::mutex_t mutex; private:
 
     public:
         class Row {

@@ -1,8 +1,9 @@
 PLATFORM=$(shell uname -s)
+
 ifeq ($(PLATFORM),Darwin)
-	FAST=-fast
+	FAST=-fast -DNDEBUG
 else
-	FAST=-O3
+	FAST=-O3 -DNDEBUG
 endif
 
 DEBUG = $(FAST)
@@ -72,10 +73,11 @@ S = ../src/
 O = objects/$(shell uname -s)
 
 CC=g++
-CFLAGS=-pipe -D BUILD_DLL -D OK_OUTSIDE_LIBS $(DEBUG) -Wall -Wextra -Woverloaded-virtual
-LFLAGS= -L"${HOME}/lib" -fpic -shared -fvisibility=hidden -lX11 -lncurses -lX11 -ljpeg -lpng -lz -lsqlite3
+CFLAGS=-I$(HOME)/include/stlsoft -pipe -D BUILD_DLL -D OK_OUTSIDE_LIBS $(DEBUG) -Wall -Wextra -Woverloaded-virtual\
+	-I/usr/X11/include
+LFLAGS= -fpic -shared -undefined suppress -flat_namespace -fvisibility=hidden -lX11 -lncurses -lX11 -ljpeg -lpng -lz -lsqlite3
 
-OUTPUT_DIR=${HOME}/lib
+OUTPUT_DIR=${HOME}/local/${MACHTYPE}/lib
 ifneq ($(findstring cygwin,${OSTYPE}),)
 	OUTPUT_DIR=/usr/bin
 endif
@@ -104,10 +106,11 @@ else
 endif
 
 ######### GSL
-ifeq ($(shell type gsl-config > /dev/null 2>&1 && echo 1 || echo 0),1)
-	CFLAGS+= -D _MR_USE_GSL
-	LFLAGS+= -lgsl
-endif
+# stupid mac won't pick up the right location!!!
+#ifeq ($(shell type gsl-config > /dev/null 2>&1 && echo 1 || echo 0),1)
+#	CFLAGS+= -D _MR_USE_GSL
+#	LFLAGS+= -lgsl
+#endif
 
 ######## GNU TLS (secure sockets)
 	SOURCES_OTHER += \
@@ -118,7 +121,7 @@ endif
 	CFLAGS+= -D MR_GNUTLS
 
 # determine whether to compile 64 bit or 32
-ifeq ($(shell uname -m),i386)
+ifeq ($(shell uname -m),x86_64)
 	CFLAGS+= -m64
 else
 	CFLAGS+= -m32
@@ -128,24 +131,24 @@ OBJECTS = $(SOURCES:%.cpp=$(O)/%.o)
 OBJECTS+= $(SOURCES_OTHER:%.cpp=$(O)/%.o)
 
 all: $(OBJECTS)
-	$(CC) $(OBJECTS) $(LFLAGS) -o "$(OUTPUT_DIR)/libmrutils.${DYLIB}"
+	$(CC) $(OBJECTS) $(LFLAGS) -dynamiclib -o "$(OUTPUT_DIR)/libmrutils.${DYLIB}"
 	cd ../src && ./maketags.sh && cd -
 
-$(O)//Developer/Extras/CoreAudio/PublicUtility/CAStreamBasicDescription.o:  
+$(O)//Developer/Extras/CoreAudio/PublicUtility/CAStreamBasicDescription.o:
 	$(CC) $(CFLAGS) -c /Developer/Extras/CoreAudio/PublicUtility/CAStreamBasicDescription.cpp $< -o $@
-$(O)//Developer/Extras/CoreAudio/PublicUtility/CAXException.o:  
+$(O)//Developer/Extras/CoreAudio/PublicUtility/CAXException.o:
 	$(CC) $(CFLAGS) -c /Developer/Extras/CoreAudio/PublicUtility/CAXException.cpp $< -o $@
-$(O)//Developer/Extras/CoreAudio/PublicUtility/CAAudioUnit.o:  
+$(O)//Developer/Extras/CoreAudio/PublicUtility/CAAudioUnit.o:
 	$(CC) $(CFLAGS) -c /Developer/Extras/CoreAudio/PublicUtility/CAAudioUnit.cpp $< -o $@
-$(O)//Developer/Extras/CoreAudio/PublicUtility/CAComponent.o:  
+$(O)//Developer/Extras/CoreAudio/PublicUtility/CAComponent.o:
 	$(CC) $(CFLAGS) -c /Developer/Extras/CoreAudio/PublicUtility/CAComponent.cpp $< -o $@
-$(O)//Developer/Extras/CoreAudio/PublicUtility/CAComponentDescription.o:  
+$(O)//Developer/Extras/CoreAudio/PublicUtility/CAComponentDescription.o:
 	$(CC) $(CFLAGS) -c /Developer/Extras/CoreAudio/PublicUtility/CAComponentDescription.cpp $< -o $@
-$(O)//Developer/Extras/CoreAudio/PublicUtility/AUOutputBL.o:  
+$(O)//Developer/Extras/CoreAudio/PublicUtility/AUOutputBL.o:
 	$(CC) $(CFLAGS) -c /Developer/Extras/CoreAudio/PublicUtility/AUOutputBL.cpp $< -o $@
-$(O)//Developer/Extras/CoreAudio/PublicUtility/CAAudioChannelLayout.o:  
+$(O)//Developer/Extras/CoreAudio/PublicUtility/CAAudioChannelLayout.o:
 	$(CC) $(CFLAGS) -c /Developer/Extras/CoreAudio/PublicUtility/CAAudioChannelLayout.cpp $< -o $@
-$(O)//Developer/Extras/CoreAudio/PublicUtility/CAAudioChannelLayoutObject.o:  
+$(O)//Developer/Extras/CoreAudio/PublicUtility/CAAudioChannelLayoutObject.o:
 	$(CC) $(CFLAGS) -c /Developer/Extras/CoreAudio/PublicUtility/CAAudioChannelLayoutObject.cpp $< -o $@
 
 $(O)/%.o: $(S)/%.cpp

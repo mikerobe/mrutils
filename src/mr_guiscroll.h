@@ -24,7 +24,7 @@ class GuiScroll {
         * Main methods
         ***************/
 
-        bool readFrom(const char * path = "-", int startLine = 0, const char * const saveDir = "/Users/firmion/Downloads/", const char * const homeDir="/Users/firmion/");
+        bool readFrom(const char * path = "-", int startLine = 0, const char * const saveDir = "/Users/mikerobe/Downloads/", const char * const homeDir="/Users/mikerobe/");
 
     private:
         void init();
@@ -34,7 +34,7 @@ class GuiScroll {
         public: int winRows, winCols; private:
         bool frozen;
 
-        public: MUTEX mutex; private:
+        public: mrutils::mutex_t mutex; private:
 
         void * pad; int header;
         mrutils::BufferedReader reader;

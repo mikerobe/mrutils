@@ -139,7 +139,7 @@ namespace {
         xauth->timestamp = timestamp;
     }
 
-    MUTEX loginMutex = mrutils::mutexCreate();
+    mrutils::mutex_t loginMutex = mrutils::mutexCreate();
     mrutils::map<std::string,xauth> authKeys;
 }
 

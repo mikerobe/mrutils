@@ -137,9 +137,9 @@ void TermLine::appendText(const char * text) {
 void TermLine::assignText(const char * text) {
     cursesTerm->assignText(text);
 }
-void TermLine::assignSearch(char c, BufferedTerm::liveFunc liveFn
-   ,BufferedTerm::liveEndFunc endFn, char endChar, bool skipChar,bool checkFns ) { 
-    cursesTerm->assignSearch(c, liveFn, endFn, endChar, skipChar,checkFns);
+void TermLine::assignSearch(char c, BufferedTerm::searchFunc const &search)
+{
+    cursesTerm->assignSearch(c, search);
 }
 
 void TermLine::setObtainMutex(bool tf) {

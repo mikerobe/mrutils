@@ -11,7 +11,7 @@ AudioFile::AudioFile(const char * path)
 #endif
 {
     #if defined(_MR_AUDIO_SOX)
-        static MUTEX mutex = mrutils::mutexCreate();
+        static mrutils::mutex_t mutex = mrutils::mutexCreate();
         static bool calledSoxInit = false;
         mrutils::mutexAcquire(mutex);
         if (!calledSoxInit) {

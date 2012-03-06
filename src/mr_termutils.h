@@ -10,6 +10,7 @@
 #include "mr_signal.h"
 #include "mr_circbuf.h"
 #include "mr_signal.h"
+#include "mr_colchooser.h"
 
 namespace mrutils {
 
@@ -63,7 +64,7 @@ class _API_ Progress {
 class _API_ BufferedTerm {
     public:
         typedef fastdelegate::FastDelegate0<bool> callFunc;
-        typedef fastdelegate::FastDelegate1<const char *> liveFunc;
+        typedef fastdelegate::FastDelegate1<mrutils::ColChooser::Column::searchTerm_t const &> liveFunc;
         typedef fastdelegate::FastDelegate1<bool,bool> liveEndFunc;
 
     private:
@@ -157,8 +158,11 @@ class _API_ BufferedTerm {
 
         inline void assignFunction(char c, callFunc callFn) {}
 
-        inline void assignSearch(char startChar, liveFunc liveFn
-            ,liveEndFunc endFn, char endChar = 0, bool skipChar=true, bool checkFns=false) { }
+        /**
+         * Not supported on windows
+         */
+        inline void assignSearch(char startChar, searchFunc const &)
+        {}
 
     private:
         bool parseChar(int c);
@@ -188,7 +192,7 @@ class _API_ BufferedTerm {
     private:
         std::string prompt, status;
         bool init_;
-        MUTEX statusMutex;
+        mrutils::mutex_t statusMutex;
         bool enteringText;
         char * p;
 
@@ -231,16 +235,33 @@ class BufferedTerm {
 
     public:
         typedef fastdelegate::FastDelegate0<bool> callFunc;
-        typedef fastdelegate::FastDelegate1<const char *> liveFunc;
+        typedef fastdelegate::FastDelegate1<mrutils::ColChooser::Column::searchTerm_t const &> liveFunc;
         typedef fastdelegate::FastDelegate1<bool,bool> liveEndFunc;
 
-    private:
+    public:
         struct searchFunc {
             liveFunc searchFn;
             liveEndFunc endFn;
             char endChar;
             bool skipChar;
             bool checkFns;
+            bool invert;
+            bool useFn;
+
+            searchFunc() :
+                searchFn(NULL),
+                endFn(NULL),
+                endChar(0),
+                skipChar(true),
+                checkFns(false),
+                invert(false),
+                useFn(false)
+            {}
+
+            /**
+             * Configures the search term to match these search settings
+             */
+            void setupTerm(mrutils::ColChooser::Column::searchTerm_t *term);
         };
 
     public:
@@ -332,10 +353,12 @@ class BufferedTerm {
         /**
          * CheckFns to enable checking function keys DURING the search.
          */
-        inline void assignSearch(char startChar, liveFunc liveFn
-            ,liveEndFunc endFn, char endChar = 0, bool skipChar=1, bool checkFns=false) { 
-            struct searchFunc s = {liveFn, endFn, (endChar?endChar:startChar), skipChar, checkFns};
-            searchFns[startChar] = s;
+        inline void assignSearch(char startChar, searchFunc const &search)
+        {
+            searchFns[startChar] = search;
+
+            if (!search.endChar)
+                searchFns[startChar].endChar = startChar;
         }
 
     public:
@@ -422,10 +445,10 @@ class BufferedTerm {
         bool smartTerm;
 
         bool gotMutex, started;
-        MUTEX writeMutex;
+        mrutils::mutex_t writeMutex;
 
-        MUTEX statusWriteMutex;
-        MUTEX statusReadMutex;
+        mrutils::mutex_t statusWriteMutex;
+        mrutils::mutex_t statusReadMutex;
         std::string status;
 
         bool init_;

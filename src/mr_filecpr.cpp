@@ -3,13 +3,13 @@
 char mrutils::FileCopyRecursive::fileStat(const char * path, bool isSrc, unsigned * modTime) {
     if (isSrc && reader != NULL) {
         // remote file
-        writer->write("filestat ");
-        writer->writeLine(path);
+        writer->write("filestat ",strlen("filestat "));
+        *writer << path;
         writer->flush();
 
         if (!reader->read(1)) return 0;
         char type = *reader->line;
-        
+
         if (type == 0) return 0;
 
         if (!reader->read(sizeof(int))) return 0;
@@ -39,8 +39,8 @@ bool mrutils::FileCopyRecursive::listDir(const char * path, bool isSrc
 
     if (isSrc && reader != NULL) {
         // remote
-        writer->write("filelist ");
-        writer->writeLine(path);
+        writer->write("filelist ",strlen("filelist "));
+        *writer << path;
         writer->flush();
 
         for (;;) {
@@ -98,11 +98,11 @@ bool mrutils::FileCopyRecursive::cp(const char * src, const char * dest, int mti
         MR_CLOSE(fs);
     } else {
         // remote source
-        writer->write("fileget ");
-        writer->writeLine(src);
+        writer->write("fileget ",strlen("fileget "));
+        *writer << src;
 
         // end request list
-        writer->writeLine("");
+        *writer << "";
         writer->flush();
 
         // read result -- one file
@@ -205,15 +205,16 @@ bool mrutils::FileCopyRecursive::run() {
                 if (okToCopy(modTimes[i])) {
                     fileNumbers.push_back(i);
 
-                    writer->write("fileget ");
-                    writer->writeLine(srcPath);
+                    writer->write("fileget ",strlen("fileget "));
+                    *writer << srcPath;
                     hasFiles = true;
                 }
             }
         }
 
         if (hasFiles) {
-            writer->writeLine(""); writer->flush();
+            *writer << "";
+            writer->flush();
 
             // now read results in order
             for (std::vector<int>::iterator it = fileNumbers.begin()

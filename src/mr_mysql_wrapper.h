@@ -187,13 +187,38 @@ namespace mysql {
         char scrambleBuf[SHA1_HASH_SIZE + 1];
 
         inline void print(FILE * fp = stdout) {
-            fprintf(fp,"length: %d\n",header.packetLength);
-            fprintf(fp,"number: %d\n",header.packetNumber);
-            fprintf(fp,"version: %d\n",protocolVersion);
-            fprintf(fp,"server_version: %s\n",serverVersion.c_str());
-            fprintf(fp,"thread id: %d\n", threadId);
-            fprintf(fp,"language: %d\n", (int)language);
-            fprintf(fp,"status: %d\n", status);
+            fprintf(fp,"length: %d\n"
+                    "number: %d\n"
+                    "version: %d\n"
+                    "server_version: %s\n"
+                    "thread id: %d\n"
+                    "language: %d\n"
+                    "status: %d\n",
+                    header.packetLength,
+                    header.packetNumber,
+                    protocolVersion,
+                    serverVersion.c_str(),
+                    threadId,
+                    (int)language,
+                    status);
+        }
+
+        inline void log(pantheios::pan_severity_t severity)
+        {
+            pantheios::logprintf(severity,"length: %d\n"
+                    "number: %d\n"
+                    "version: %d\n"
+                    "server_version: %s\n"
+                    "thread id: %d\n"
+                    "language: %d\n"
+                    "status: %d\n",
+                    header.packetLength,
+                    header.packetNumber,
+                    protocolVersion,
+                    serverVersion.c_str(),
+                    threadId,
+                    (int)language,
+                    status);
         }
 
         inline bool read(mrutils::BufferedReader& reader) {
@@ -245,8 +270,9 @@ namespace mysql {
         const char * user;
         const char * scramblePass;
         const char * databaseName;
-        
-        bool send(mrutils::BufferedWriter& writer) {
+
+        bool send(mrutils::BufferedWriter& writer)
+        {
             uint8_t scrambleSize = SHA1_HASH_SIZE;
             size_t userLen = strlen(user) + 1;
             size_t databaseLen = strlen(databaseName);
@@ -271,18 +297,26 @@ namespace mysql {
                          | CLIENT_LONG_PASSWORD
                          ;
 
-            char buffer[23]; memset(buffer,0,23);
+            char buffer[23];
+            memset(buffer,0,sizeof(buffer));
 
-            writer.write((char*)&header,4);
-            writer.write((char*)&client_flags,4);
-            writer.write((char*)&max_packet_size,4);
-            writer.write((char*)&charset_number,1);
-            writer.write(buffer,23);
-            writer.write(user,userLen);
-            writer.write((char*)&scrambleSize,1);
-            if (scrambleSize > 0) writer.write(scramblePass,scrambleSize);
-            writer.write(databaseName);
-            if (!writer.flush()) return false;
+            try {
+                writer.write((char*)&header,4);
+                writer.write((char*)&client_flags,4);
+                writer.write((char*)&max_packet_size,4);
+                writer.write((char*)&charset_number,1);
+                writer.write(buffer,23);
+                writer.write(user,userLen);
+                writer.write((char*)&scrambleSize,1);
+                if (scrambleSize > 0)
+                    writer.write(scramblePass,scrambleSize);
+                writer.write(databaseName, databaseLen);
+                writer.flush();
+            } catch (mrutils::ExceptionNoSuchData const &e)
+            {
+                std::cerr << e.what() << std::endl;
+                return false;
+            }
 
             return true;
         }
@@ -457,34 +491,44 @@ namespace mysql {
         : type(type) 
         {}
 
-        inline bool send(mrutils::BufferedWriter& writer) {
-            switch(type) {
-                case COM_QUERY:
-                {
-                    // compute total size
-                    uint32_t size = 1 + strlen(query);
-                    memcpy(&header.packetLength, &size, 3);
+        inline bool send(mrutils::BufferedWriter& writer)
+        {
+            try {
+                switch(type) {
+                    case COM_QUERY:
+                        {
+                            // compute total size
+                            uint32_t size = 1 + strlen(query);
+                            memcpy(&header.packetLength, &size, 3);
 
-                    // always reset
-                    header.packetNumber = 0;
+                            // always reset
+                            header.packetNumber = 0;
 
-                    writer.write((char*)&header,4);
-                    writer.write((char*)&commands[type],1);
-                    writer.write(query,size-1);
-                    if (!writer.flush()) return false;
-                } break;
+                            try {
+                                writer.write((char*)&header,4);
+                                writer.write((char*)&commands[type],1);
+                                writer.write(query,size-1);
+                                writer.flush();
+                            } catch (mrutils::ExceptionNoSuchData const &)
+                            {
+                                return false;
+                            }
+                        } break;
 
-                default:
-                {
-                    uint32_t size = 1;
-                    memcpy(&header.packetLength, &size, 3);
-                    header.packetNumber = 0;
+                    default:
+                        {
+                            uint32_t size = 1;
+                            memcpy(&header.packetLength, &size, 3);
+                            header.packetNumber = 0;
 
-                    writer.write((char*)&header,4);
-                    writer.write((char*)&commands[type],1);
-                    if (!writer.flush()) return false;
-
-                } break;
+                            writer.write((char*)&header,4);
+                            writer.write((char*)&commands[type],1);
+                            writer.flush();
+                        } break;
+                }
+            } catch (mrutils::ExceptionNoSuchData const &)
+            {
+                return false;
             }
 
             return true;

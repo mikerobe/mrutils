@@ -24,7 +24,7 @@ namespace mrutils {
         };
 
         struct _API_ urlRequest_t {
-            urlRequest_t(const char * url = NULL)
+            urlRequest_t(std::string const &url = "")
             : url(url)
              ,cookieFile(NULL)
              ,postFields(NULL)
@@ -34,7 +34,8 @@ namespace mrutils {
              ,xmlOk(true)
             {}
 
-            const char * url, * cookieFile, * postFields, * cookieData, * referer;
+            std::string url; ///< contains the redirected URL
+            char const *cookieFile, *postFields, *cookieData, *referer;
             bool mobile, xmlOk;
         };
 
@@ -43,15 +44,18 @@ namespace mrutils {
         };
 
         struct _API_ urlRequestM_t {
-            friend int getMultiple(const std::set<urlRequestM_t>& requests, std::vector<curlDataM_t> * data, int stopFD);
-            urlRequestM_t() : id(0) {}
-            urlRequestM_t(const urlRequestM_t& other) : url(other.url), id(other.id) {}
+            urlRequestM_t() :
+                    id(0)
+            {}
+
+            urlRequestM_t(urlRequestM_t const &other) :
+                    url(other.url), id(other.id)
+            {}
 
             std::string url;
 
-            inline bool operator<(const urlRequestM_t& other) const {
-                return (0 > strcmp(url.c_str(),other.url.c_str()));
-            }
+            inline bool operator<(urlRequestM_t const &other) const
+            { return (0 > strcmp(url.c_str(),other.url.c_str())); }
 
             mutable int id;
         };
@@ -60,15 +64,10 @@ namespace mrutils {
         * Pass the two required data structures, and optionally
         * a stopFD, which will halt the request when there is data
         * to be read in that FD
-        *
-        * The URL is received in one fell-swoop into the buffer until
-        * there's no more data or the buffer is exhausted
-        *
-        * Returns a string for the URL that is ultimately retrieved
         */
-        _API_ std::string getURL(const urlRequest_t& request, curlData_t& data, int stopFD = -1);
+        _API_ int getURL(urlRequest_t* request, curlData_t& data, int stopFD = -1);
 
-        _API_ std::string getURL(const urlRequest_t& request, curlDataM_t& data, int stopFD = -1);
+        _API_ int getURL(urlRequest_t* request, curlDataM_t& data, int stopFD = -1);
 
         /**
          * Used for multiple plain-vanilla requests

@@ -3,6 +3,7 @@
 #include "mr_sockets.h"
 #include "mr_set.h"
 #include "mr_bufferedreader.h"
+#include <pantheios/pantheios.hpp>
 
 #ifdef OK_OUTSIDE_LIBS
 #include "mr_gzipreader.h"
@@ -18,6 +19,22 @@
     }
 
 namespace {
+    /**
+     * Returns string timestamp used for error logging
+     * TODO: this could be done more efficiently with thread local
+     * storage...
+     */
+    std::string getTime()
+    {
+        struct tm *timeinfo;
+        time_t rawtime;
+        time(&rawtime);
+        timeinfo = localtime(&rawtime);
+        char buffer[16];
+        strftime(buffer,sizeof(buffer),"%X - ", timeinfo);
+        return buffer;
+    }
+
     struct getChunkData_t {
         // for reading from socket
         int maxFD;
@@ -127,9 +144,11 @@ namespace {
                 RECV_P(2);
             }
 
-            if (i == (int)sizeof data.buffer) {
+            if (i == (int)sizeof(data.buffer)) {
                 data.buffer[15] = '\0';
-                std::cerr << "invalid chunked data size: " << data.buffer << std::endl;
+                pantheios::log(pantheios::error,
+                    "invalid chunked data size: ",
+                    data.buffer);
                 return 0;
             }
 
@@ -163,7 +182,9 @@ namespace {
         }
     };
 
-    int readHeader(mrutils::BufferedReader& reader, const char * url, headerData_t * data) {
+    int readHeader(mrutils::BufferedReader& reader,
+            const char * url, headerData_t * data)
+    {
         char * p, * q;
 
         // skip any empty lines
@@ -173,8 +194,11 @@ namespace {
         }
 
         if (0!=strncmp(reader.line,"HTTP",4)
-            || NULL == (p = strchr(reader.line,' '))) {
-            std::cerr << "mrutils::curl received invalid response from " << url << ": " << reader.line << std::endl;
+            || NULL == (p = strchr(reader.line,' ')))
+        {
+            pantheios::logprintf(pantheios::error,
+                "mrutils::curl %s:%d received invalid response from %s: %s",
+                __FILE__,__LINE__,url,reader.line);
             return -1;
         }
 
@@ -184,7 +208,9 @@ namespace {
 
         switch (*++p) {
             case '1': // informational. no content
-                std::cerr << "mrutils::curl pure information reply to " << url << std::endl;
+                pantheios::log(pantheios::notice,
+                        "mrutils::curl pure information reply to ",
+                        url);
                 break;
 
             case '2': // success
@@ -204,7 +230,9 @@ namespace {
                 } 
 
             default: // 5 (server error)
-                std::cerr << "mrutils::curl Got error code " << *p << *(p+1) << *(p+2) << " from " << url << std::endl;
+                pantheios::logprintf(pantheios::notice,
+                    "mrutils::curl got error code %c%c%c from %s",
+                    *p, *(p+1), *(p+2), url);
                 break;
         }
 
@@ -234,41 +262,87 @@ namespace {
         //std::cout << std::endl;
 
         if (data->redirected && data->location.empty()) {
-            std::cerr << "mrutils::curl got redirected with no location from " << url << std::endl;
+            pantheios::log(pantheios::notice,
+                    "mrutils::curl got redirected with no location from ",
+                    url);
             return false;
         }
 
         return good;
     }
 
-    std::string getURL(const mrutils::curl::urlRequest_t& request, mrutils::curl::curlData_t * data, mrutils::curl::curlDataM_t* dataM, int stopFD = -1, int redirCount = 0) {
-        using namespace mrutils::curl; 
-        if (data != NULL) data->eob = data->buffer;
+    int getURL(mrutils::curl::urlRequest_t* request,
+        mrutils::curl::curlData_t * data,
+        mrutils::curl::curlDataM_t* dataM,
+        int stopFD = -1,
+        int redirCount = 0)
+    {
+        using namespace mrutils::curl;
+        char buffer[1024];
 
-        if (request.url == NULL || *request.url == 0) return (std::cerr << "attempt to call getURL on empty URL" << std::endl, "");
-        if (!mrutils::startsWithI(request.url,"http://")) return "";
-        if (redirCount > 5) return (std::cerr << "Too many redirects for url: " << request.url << std::endl,"");
-    
-        static char empty = '\0';
-        static const char * mobileAgent = "SonyEricssonT610/R501 Profile/MIDP-1.0 Configuration/CLDC-1.0";
-        static const char * nativeAgent = "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_6_4; en-us) AppleWebKit/534.11+ (KHTML, like Gecko) Version/5.0.2 Safari/533.18.5";
+        if (data != NULL)
+            data->eob = data->buffer;
+
+        if (request->url.empty())
+        {
+            pantheios::log(pantheios::notice,
+                    "mrutils::curl attempt to call getURL on empty URL");
+            return __LINE__;
+        }
+
+        if (!mrutils::startsWithI(request->url.c_str(),"http://"))
+        {
+            pantheios::log(pantheios::error,
+                    "mrutils::curl can't handle non-http url: ",
+                    request->url);
+            return __LINE__;
+        }
+
+        if (redirCount > 5)
+        {
+            pantheios::logprintf(pantheios::error,
+                    "mrutils::curl too many redirects (%d) for url: %s",
+                    redirCount, request->url.c_str());
+            return __LINE__;
+        }
+
+        static const char * mobileAgent =
+            "SonyEricssonT610/R501 Profile/MIDP-1.0 Configuration/CLDC-1.0";
+            //"Mozilla/5.0 (BlackBerry; U; BlackBerry AAAA; en-US) AppleWebKit/534.11+ (KHTML, like Gecko) Version/X.X.X.X Mobile Safari/534.11+";
+        static const char * nativeAgent =
+            "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_6_4; en-us) "
+            "AppleWebKit/534.11+ (KHTML, like Gecko) "
+            "Version/5.0.2 Safari/533.18.5";
         int len;
 
+        std::replace(request->url.begin(), request->url.end(), ' ', '+');
+        if (request->url.size() > sizeof(buffer))
+        {
+            pantheios::log(pantheios::error,
+                    "mrutils::curl URL is too long: ",
+                    request->url);
+            return __LINE__;
+        }
+        strcpy(buffer,request->url.c_str());
 
-        // replace ' ' with '+' in url
-        std::string url = request.url;
-        for (std::string::iterator it = url.begin(); it != url.end(); ++it) if (*it == ' ') *it = '+';
+        pantheios::log(pantheios::informational,
+                "mrutils::curl request: ",
+                request->url);
 
-        char * host = const_cast<char*>(url.c_str()) + 7;
-        char * file = strchr(host,'/');
+        char *host = buffer + strlen("http://");
+        char *file = strchr(host,'/');
         int port = 80;
-    
-        if (!file) file = &empty;
-        else *file++ = '\0';
+
+        if (!file)
+            file = (char*)"";
+        else
+            *file++ = '\0';
 
         // check for port
-        if (char * portStr = strchr(host,':')) {
-            port = atoi(portStr+1); *portStr = '\0';
+        if (char * portStr = strchr(host,':'))
+        {
+            port = atoi(portStr+1);
+            *portStr = '\0';
         }
 
         mrutils::stringstream ss;
@@ -289,32 +363,69 @@ Connection: close\r\n\
 \r\n"
         ,file
         ,host
-        ,request.mobile ? mobileAgent : nativeAgent
-        ,request.xmlOk ? "text/xml," : ""
-        ,request.referer
+        ,request->mobile ? mobileAgent : nativeAgent
+        ,request->xmlOk ? "text/xml," : ""
+        ,request->referer
     );
-        //std::cout << ss << std::endl;
-    
-        mrutils::Socket sock(host,port);
-        if (!sock.initClient(5,stopFD)) return (std::cerr << "Can't connect to " << host << std::endl,"");
-        if ((int)ss.str().size() != sock.write(ss.c_str(), ss.str().size())) return (std::cerr << "mrutils::curl got disconnected sending request to " << host << std::endl,"");
 
-        mrutils::BufferedReader reader("",data == NULL ? 32768 : data->buffSz-1, data == NULL ? NULL : data->buffer);
-        reader.setSocketInterruptFD(stopFD); reader.setSocketWaitTime(5); 
-        reader.use(sock);
-    
-        headerData_t header;
-        int ret = readHeader(reader,request.url,&header);
-        if (ret == -1) return "";
-        if (ret == 0 && !header.redirected) return "";
-    
-        if (header.redirected) {
-            urlRequest_t newRequest(request);
-            newRequest.url = header.location.c_str();
-            return getURL(newRequest,data,dataM,stopFD,++redirCount);
+        mrutils::Socket sock(host,port);
+        if (!sock.initClient(5,stopFD))
+        {
+            pantheios::log(pantheios::error,
+                    "mrutils::curl can't connect to: ",
+                    host);
+            return -1;
         }
 
-        if (header.chunked) return (std::cerr << "mrutils::curl sent HTTP/1.0 protocol, got chunked data back: " << request.url << std::endl, "");
+        if ((int)ss.str().size() != sock.write(ss.c_str(), ss.str().size()))
+        {
+            pantheios::log(pantheios::error,
+                    "mrutils::curl got disonnected sending request to:",
+                    host);
+            return -1;
+        }
+
+        mrutils::BufferedReader reader("",data == NULL ? 32768 : data->buffSz-1,
+            data == NULL ? NULL : data->buffer);
+        reader.setSocketInterruptFD(stopFD);
+        reader.setSocketWaitTime(5);
+        reader.use(sock);
+
+        headerData_t header;
+        int ret = readHeader(reader,request->url.c_str(),&header);
+        if (ret == -1)
+            return -1;
+        if (ret == 0 && !header.redirected)
+            return -1;
+
+        if (header.redirected)
+        {
+            // move host off the stack buffer onto the reader's buffer
+            memcpy(reader.buffer, buffer, sizeof(buffer));
+            host = reader.buffer + (host - buffer);
+
+            if (header.location[0] == '/') // relative URL
+            {
+                snprintf(buffer, sizeof(buffer),
+                    "http://%s:%d%s",host,port,header.location.c_str());
+                request->url = buffer;
+            } else // absolute URL
+            {
+                strncpy(buffer, header.location.c_str(), sizeof(buffer));
+                buffer[sizeof(buffer)-1] = '\0';
+                request->url = buffer;
+            }
+
+            return getURL(request,data,dataM,stopFD,++redirCount);
+        }
+
+        if (header.chunked)
+        {
+            pantheios::log(pantheios::error,
+                    "mrutils::curl sent HTTP/1.0 protocol, got chunked data back from host: ",
+                    host);
+            return -1;
+        }
 
     #ifdef OK_OUTSIDE_LIBS
         if (header.gzipped) {
@@ -329,7 +440,13 @@ Connection: close\r\n\
                 mrutils::GZipReader gz(reader);
                 // copy to buffer
                 for (int r, size = data->buffSz; size > 0 && 0 != (r = gz.read(data->eob,size)); data->eob += r, size -= r)
-                    if (r < 0) return (std::cerr << "mrutils::curl error gunzipping file at " << request.url << std::endl, "");
+                    if (r < 0)
+                    {
+                        pantheios::log(pantheios::error,
+                                "mrutils::curl error gunzipping file from host: ",
+                                host);
+                        return -1;
+                    }
                 *data->eob = '\0';
             } else {
                 mrutils::GZipReader gz(reader);
@@ -342,8 +459,10 @@ Connection: close\r\n\
                 if (data != NULL) {
                     len = reader.read(0); reader.switchBuffer(data->buffer);
                     if (len < 0 || 0 > (len = reader.read(reader.bufSize))) {
-                        std::cerr << "mrutils::curl error getting data for " << request.url << std::endl;
-                        return "";
+                        pantheios::logprintf(pantheios::error,
+                                "mrutils::curl %s:%d error getting data for %s",
+                                __FILE__,__LINE__,request->url.c_str());
+                        return -1;
                     } *(data->eob = data->buffer + len) = '\0';
                 } else {
                     for (int l = reader.unreadOnBuffer();0 < (l = reader.read(l))
@@ -352,23 +471,33 @@ Connection: close\r\n\
             } else {
                 if (data != NULL) {
                     // retrieve partial if too big
-                    if (header.length > reader.bufSize) {
-                        std::cerr << "warning page at " << request.url << " is bigger than buffer (" << reader.bufSize << ")" << std::endl;
+                    if (header.length > reader.bufSize)
+                    {
+                        pantheios::logprintf(pantheios::warning,
+                                "mrutils::curl %s:%d page at %s is bigger than buffer (%d)",
+                                __FILE__,__LINE__,request->url.c_str(),
+                                reader.bufSize);
                         header.length = reader.bufSize;
                     }
 
                     reader.read(0);
                     reader.switchBuffer(data->buffer);
-                    if (header.length != reader.read(header.length)) {
-                        std::cerr << "mrutils::curl error getting data for " << request.url << std::endl;
-                        return "";
+                    if (header.length != reader.read(header.length))
+                    {
+                        pantheios::logprintf(pantheios::error,
+                                "mrutils::curl %s:%d error getting data for %s",
+                                __FILE__,__LINE__,request->url.c_str());
+                        return -1;
                     } *(data->eob = data->buffer + header.length) = '\0';
                 } else {
                     for (int l = reader.unreadOnBuffer();header.length > 0;header.length -= l, l = reader.bufSize) {
                         if (header.length < l) l = header.length;
-                        if (l != reader.read(l)) {
-                            std::cerr << "mrutils::curl got disconnected reading from " << host << std::endl;
-                            return "";
+                        if (l != reader.read(l))
+                        {
+                            pantheios::logprintf(pantheios::error,
+                                "mrutils::curl %s:%d got disconnected reading from host: %s",
+                                __FILE__, __LINE__, host);
+                            return -1;
                         } dataM->content.write(reader.line,l);
                     }
 
@@ -376,7 +505,7 @@ Connection: close\r\n\
             }
         }
     
-        return request.url;
+        return 0;
     }
 
     struct redirect_t { 
@@ -386,88 +515,138 @@ Connection: close\r\n\
 
 }
 
-std::string mrutils::curl::getURL(const urlRequest_t& request, curlDataM_t& dataM, int stopFD) {
+int mrutils::curl::getURL(urlRequest_t *request, curlDataM_t& dataM, int stopFD) {
     return ::getURL(request,NULL,&dataM,stopFD,0);
 }
 
-std::string mrutils::curl::getURL(const urlRequest_t& request, curlData_t& data, int stopFD) {
+int mrutils::curl::getURL(urlRequest_t *request, curlData_t& data, int stopFD) {
     return ::getURL(request,&data,NULL,stopFD,0);
 }
 
-int mrutils::curl::getMultiple(const std::set<urlRequestM_t>& requests_, std::vector<curlDataM_t> * data, int stopFD) {
-    if (requests_.empty()) {
-        std::cerr << "call to " << __PRETTY_FUNCTION__ << " with empty request" << std::endl;
+int mrutils::curl::getMultiple(std::set<urlRequestM_t> const &requests_,
+        std::vector<curlDataM_t> *data, int stopFD)
+{
+    if (requests_.empty())
+    {
+        pantheios::log(pantheios::warning,
+            __PRETTY_FUNCTION__, " call with empty request");
         return 0;
     }
 
     int hits = 0;
 
     mrutils::BufferedReader reader; 
-    reader.setSocketInterruptFD(stopFD); reader.setSocketWaitTime(5); 
+    reader.setSocketInterruptFD(stopFD);
+    reader.setSocketWaitTime(10); 
     mrutils::stringstream ss;
     std::string scratchBuffer;
 
-    std::vector<const urlRequestM_t*> requests; requests.resize(requests_.size());
-    if (data->size() != requests_.size()) data->resize(requests_.size());
+    std::vector<urlRequestM_t const*> requests;
+    requests.resize(requests_.size());
+
+    if (data->size() != requests_.size())
+        data->resize(requests_.size());
 
     // set the id of each request
-    { int i = 0; 
-      for (std::set<urlRequestM_t>::const_iterator it = requests_.begin(); it != requests_.end(); ++it, ++i) {
-          (*it).id = i; requests[i] = &*it;
-      }
+    {   int i = 0; 
+        for (std::set<urlRequestM_t>::const_iterator it = requests_.begin();
+                it != requests_.end(); ++it, ++i)
+        {
+            (*it).id = i;
+            requests[i] = &*it;
+        }
     }
 
-    std::vector<redirect_t> redirects; redirects.reserve(requests.size());
+    std::vector<redirect_t> redirects;
+    redirects.reserve(requests.size());
 
-    for (std::vector<const urlRequestM_t*>::iterator start = requests.begin(), end = start
-        ;start != requests.end(); start = end) {
-        if (!mrutils::startsWithI((*start)->url.c_str(),"http://")) { ++end; continue; }
+    for (std::vector<urlRequestM_t const*>::iterator start = requests.begin(), end = start;
+            start != requests.end(); start = end)
+    {
+        if (!mrutils::startsWithI((*start)->url.c_str(),"http://"))
+        {
+            ++end;
+            continue;
+        }
 
-        const char * p, *q;
+        char const *p, *q;
 
-        std::string host; p = (*start)->url.c_str() + ctlen("http://");
-        if (NULL == (q = strchr(p,'/'))) host = p; else host.assign(p,q-p);
+        std::string host;
+        p = (*start)->url.c_str() + ctlen("http://");
+        if (NULL == (q = strchr(p,'/')))
+            host = p;
+        else
+            host.assign(p,q-p);
 
-        for (; end != requests.end(); ++end) {
-            if (!mrutils::startsWithI((*end)->url.c_str(),"http://")) break;
+
+        pantheios::log(pantheios::informational,
+                "mrutils::curl ",__PRETTY_FUNCTION__," request: ",
+                host,"/...");
+
+        for (; end != requests.end(); ++end)
+        {
+            if (!mrutils::startsWithI((*end)->url.c_str(),"http://"))
+                break;
+
             p = (*end)->url.c_str() + ctlen("http://");
-            if (NULL == (q = strchr(p,'/'))) {
-                if (0 != strcmp(host.c_str(),p)) break;
-            } else if ((int)host.size() != q-p || 0!=strncmp(host.c_str(),p,host.size())) break;
+
+            if (NULL == (q = strchr(p,'/')))
+            {
+                if (0 != strcmp(host.c_str(),p))
+                    break;
+            } else if ((int)host.size() != q-p || 0!=strncmp(host.c_str(),p,host.size()))
+            {
+                break;
+            }
         }
 
         // build request
         ss.clear();
-        for (std::vector<const urlRequestM_t*>::iterator it = start, last = end-1; it != end; ++it) {
-            const char * file = (*it)->url.c_str() + ctlen("http://") + host.size();
-            if (*file == '/') ++file;
-            oprintf(ss,"\
-GET /%s HTTP/1.1\r\n\
-Host: %s\r\n\
-Accept: text/xml, text/html;q=0.9, image/jpg;q=0.5, image/jpeg;q=0.5, image/png;q=0.5, image/gif;q=0.5\r\n\
-Accept-Language: en, fr;q=0.50\r\n"
-#ifdef OK_OUTSIDE_LIBS
-"Accept-Encoding: gzip,identity\r\n"
-#else
-"Accept-Encoding: identity\r\n"
-#endif
-"Accept-Charset: ISO-8859-1, utf-8;q=0.66, *;q=0.66\r\n\
-Connection: %s\r\n\
-\r\n",file
-    ,host.c_str()
-    ,it == last ? "close" : "keepalive");
+        for (std::vector<const urlRequestM_t*>::iterator it = start, last = end-1;
+                it != end; ++it)
+        {
+            char const *file = (*it)->url.c_str() + ctlen("http://") + host.size();
+
+            if (*file == '/')
+                ++file;
+
+            oprintf(ss,
+                    "GET /%s HTTP/1.1\r\n"
+                    "Host: %s\r\n"
+                    "Accept: text/xml, text/html;q=0.9, image/jpg;q=0.5, image/jpeg;q=0.5, image/png;q=0.5, image/gif;q=0.5\r\n"
+                    "Accept-Language: en, fr;q=0.50\r\n"
+#               ifdef OK_OUTSIDE_LIBS
+                    "Accept-Encoding: gzip,identity\r\n"
+#               else
+                    "Accept-Encoding: identity\r\n"
+#               endif
+                    "Accept-Charset: ISO-8859-1, utf-8;q=0.66, *;q=0.66\r\n"
+                    "Connection: %s\r\n"
+                    "\r\n",
+                    file,
+                    host.c_str(),
+                    it == last ? "close" : "keepalive");
         }
 
-        //std::cerr << ss << std::endl;
 
         // connect to host & send requests
         mrutils::Socket sock(host.c_str(),80);
-        if (!sock.initClient(5,stopFD)) {
-            std::cerr << "Can't connect to " << host << std::endl;
+
+        if (!sock.initClient(5,stopFD))
+        {
+            pantheios::log(pantheios::error,
+                    "mrutils::curl ",__PRETTY_FUNCTION__,
+                    " can't connect to host: ", host);
             continue;
         }
-        if (sock.write(ss.c_str(),ss.str().size()) != (int)ss.str().size()) {
-            std::cerr << "mrutils::curl got disconnected sending request to " << host << std::endl;
+
+        std::string const requestStr = ss.str();
+        if (sock.write(requestStr.c_str(), requestStr.size())
+                != (int)requestStr.size())
+        {
+            pantheios::logprintf(pantheios::error,
+                "mrutils::curl %s:%d got disconnected reading from host: %s",
+                __FILE__, __LINE__, host.c_str());
             continue;
         }
 
@@ -478,10 +657,20 @@ Connection: %s\r\n\
         getChunkData_t chunkData(sock,stopFD);
 
         // parse each result
-        for (std::vector<const urlRequestM_t*>::iterator it = start, last = end-1; it != end; ++it) {
+        for (std::vector<const urlRequestM_t*>::iterator it = start,
+                    last = end-1; it != end; ++it)
+        {
             header.reset();
+
             const int ret = readHeader(reader,(*it)->url.c_str(),&header);
-            if (ret == -1) { end = it; if (end == start) ++end; break; }
+
+            if (ret == -1)
+            { // server didn't send response for this one...
+                end = it; // try it again without grouping
+                if (end == start)
+                    ++end;
+                break;
+            }
 
             if (header.redirected) {
                 int i = (int) redirects.size(); redirects.resize(i+1);
@@ -527,7 +716,10 @@ Connection: %s\r\n\
 
                     reader.use(sock,false);
                     if (!chunkData.finish(reader)) {
-                        std::cerr << "mrutils::curl chunked data error: line isn't 0 at " << reader.line << " " << (*it)->url << std::endl;
+                        pantheios::log(pantheios::error,
+                            "mrutils::curl chunked data error: "
+                            "line isn't 0 at ", reader.line, " url: ",
+                            (*it)->url);
                         break;
                     }
                 } else {
@@ -541,7 +733,9 @@ Connection: %s\r\n\
             } else {
                 if (skipContent) {
                     if (!reader.skip(header.length)) {
-                        std::cerr << "mrutils::curl got disconnected reading from " << host << std::endl;
+                        pantheios::logprintf(pantheios::error,
+                            "mrutils::curl %s:%d got disconnected reading from host: %s",
+                            __FILE__, __LINE__, host.c_str());
                         break;
                     }
                 } else {
@@ -550,7 +744,9 @@ Connection: %s\r\n\
                     for (int l = reader.unreadOnBuffer();header.length > 0;header.length -= l, l = reader.bufSize) {
                         if (header.length < l) l = header.length;
                         if (l != reader.read(l)) {
-                            std::cerr << "mrutils::curl got disconnected reading from " << host << std::endl;
+                            pantheios::logprintf(pantheios::error,
+                                "mrutils::curl %s:%d got disconnected reading from host: %s",
+                                __FILE__, __LINE__, host.c_str());
                             good = false;
                             break;
                         }
@@ -558,16 +754,24 @@ Connection: %s\r\n\
                         data->at((*it)->id).content.write(reader.line,l);
                     }
 
-                    if (!good) break;
+                    if (!good)
+                        break;
                 }
             }
-            if (!skipContent) ++hits;
+
+            if (!skipContent)
+                ++hits;
         }
     }
 
     // handle redirects
-    for (std::vector<redirect_t>::iterator it = redirects.begin(); it != redirects.end(); ++it) {
-        if (!::getURL(urlRequest_t((*it).location.c_str()), NULL, &data->at((*it).request->id),stopFD,0).empty()) ++hits;
+    for (std::vector<redirect_t>::iterator it = redirects.begin();
+            it != redirects.end(); ++it)
+    {
+        urlRequest_t newRequest(it->location);
+        if (0 != ::getURL(&newRequest,
+                NULL, &data->at((*it).request->id),stopFD,0))
+            ++hits;
     }
 
     return hits;

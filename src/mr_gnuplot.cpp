@@ -203,7 +203,7 @@ bool mrutils::Gnuplot::init(const char * term, const char * file) {
             if (file != NULL && *file != 0) {
                 strcpy(strcpy(p, " > "),file);
             } else {
-                strcpy(p, " | /Users/firmion/bin/img --persist -f -");
+                strcpy(p, " | /Users/mikerobe/bin/img --persist -f -");
                 //strcpy(p, " | xv -");
             }
             gnucmd = MR_POPEN(path,"w");
@@ -217,8 +217,8 @@ bool mrutils::Gnuplot::init(const char * term, const char * file) {
             if (file != NULL && *file != 0) {
                 strcpy(strcpy(p, " > "),file);
             } else {
-                //strcpy(p, " | /Users/firmion/bin/img -f -");
-                strcpy(p, " | /Users/firmion/bin/img --persist -f -");
+                //strcpy(p, " | /Users/mikerobe/bin/img -f -");
+                strcpy(p, " | /Users/mikerobe/bin/img --persist -f -");
                 //strcpy(p, " | xv -");
             }
             gnucmd = MR_POPEN(path,"w");

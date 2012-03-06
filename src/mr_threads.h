@@ -11,12 +11,6 @@
     #include <process.h>
     #include "critsectex.h"
 
-	#define THREADRET unsigned __stdcall
-    #define THREAD_HANDLE HANDLE
-	#define THREAD_FINISH return 0;
-
-    #define MUTEX mrutils::p::WindowsFastMutex*
-
     #define ATOMIC_INT volatile int
     #define ATOMIC_INCREMENT(a) InterlockedIncrement(&a)
     #define ATOMIC_DECREMENT(a) InterlockedDecrement(&a)
@@ -26,11 +20,6 @@
 #else
     #include <pthread.h>
     #include <unistd.h>
-    #define THREADRET void*
-    #define THREAD_HANDLE pthread_t
-	#define THREAD_FINISH pthread_exit(NULL)
-
-    #define MUTEX pthread_mutex_t
 
     #define ATOMIC_INT volatile int
     #define ATOMIC_INCREMENT(a) __sync_add_and_fetch(&a,1)
@@ -47,11 +36,19 @@
 namespace mrutils {
     typedef fastdelegate::FastDelegate1<void*> threadFunction;
 
+#   if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__TOS_WIN__)
+    typedef HANDLE thread_t;
+    typedef mrutils::p::WindowsFastMutex* mutex_t;
+#   else
+    typedef pthread_t thread_t;
+    typedef pthread_mutex_t mutex_t;
+#   endif
+
 	namespace p {
 	struct _threadData { 
 		threadFunction func; void * data;
 
-        #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__TOS_WIN__)
+#       if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__TOS_WIN__)
         HANDLE thread;
 
         _threadData(threadFunction func, void * data)
@@ -75,7 +72,7 @@ namespace mrutils {
         ~_threadData() {
             pthread_attr_destroy(&attr);
         }
-        #endif
+#       endif
 	};
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__TOS_WIN__)
@@ -108,22 +105,22 @@ namespace mrutils {
 #endif
 	}
 
-    static inline MUTEX mutexCreate() {
+    static inline mutex_t mutexCreate() {
         #ifdef WIN32
             return new p::WindowsFastMutex();
 
-            //MUTEX m = new CRITICAL_SECTION();
+            //mutex_t m = new CRITICAL_SECTION();
             //InitializeCriticalSectionAndSpinCount(m, 0x80000400);
             //return m;
 
             //return CreateMutex(NULL,false,NULL);
         #else
-            MUTEX m = PTHREAD_MUTEX_INITIALIZER;
+            mutex_t m = PTHREAD_MUTEX_INITIALIZER;
             return m;
         #endif
     }
 
-    static inline void mutexDelete(_UNUSED MUTEX& m) {
+    static inline void mutexDelete(_UNUSED mutex_t& m) {
         #ifdef WIN32
             delete m;
             //DeleteCriticalSection(m);
@@ -133,7 +130,7 @@ namespace mrutils {
         #endif
     }
 
-    static inline bool mutexTryAcquire(MUTEX& m) {
+    static inline bool mutexTryAcquire(mutex_t& m) {
         #ifdef WIN32
             return m->m.Lock(m->state, 0);
             //return TryEnterCriticalSection(m);
@@ -143,7 +140,7 @@ namespace mrutils {
         #endif
     }
 
-    static inline bool mutexWaitAcquire(MUTEX& m, int secs) {
+    static inline bool mutexWaitAcquire(mutex_t& m, int secs) {
         #ifdef WIN32
             return m->m.Lock(m->state, secs*1000);
             //return TryEnterCriticalSection(m);
@@ -165,7 +162,7 @@ namespace mrutils {
         #endif
     }
 
-    static inline void mutexAcquire(MUTEX& m) {
+    static inline void mutexAcquire(mutex_t& m) {
         #ifdef WIN32
             m->m.Lock(m->state, INFINITE);
             //EnterCriticalSection(m);
@@ -174,7 +171,7 @@ namespace mrutils {
             pthread_mutex_lock( &m );
         #endif
     }
-    static inline void mutexRelease(MUTEX& m) {
+    static inline void mutexRelease(mutex_t& m) {
         #ifdef WIN32
             m->m.Unlock(m->state);
            //LeaveCriticalSection(m);
@@ -186,14 +183,14 @@ namespace mrutils {
 
     class mutexScopeAcquire {
         public:
-            mutexScopeAcquire(MUTEX& m)
+            inline mutexScopeAcquire(mutex_t& m)
             : m(m) 
             { mrutils::mutexAcquire(m); }
 
-            ~mutexScopeAcquire() 
+            inline ~mutexScopeAcquire() 
             { mrutils::mutexRelease(m); }
         private:
-            MUTEX & m;
+            mutex_t & m;
     };
 
     static inline void sleep(unsigned millis) {
@@ -204,9 +201,9 @@ namespace mrutils {
         #endif
     }
 
-    static inline THREAD_HANDLE threadRun(threadFunction func, void*data = NULL, bool detached = true) {
+    static inline thread_t threadRun(threadFunction func, void*data = NULL, bool detached = true) {
 		p::_threadData *d = new p::_threadData(func,data);
-    
+
 		#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__TOS_WIN__)
             #error WINDOWS TODO handle detached thread option
             d->thread = (HANDLE)_beginthreadex(NULL, 0, p::_threadRun, d, 0, NULL);
@@ -218,7 +215,7 @@ namespace mrutils {
         #endif
     }
 
-    static inline int threadJoin(THREAD_HANDLE threadId) { 
+    static inline int threadJoin(thread_t threadId) { 
 		#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__TOS_WIN__)
             #error "TODO windows threading"
         #else
@@ -231,7 +228,7 @@ namespace mrutils {
      * Setup is 2 threads, one needs to signal the other.
      * It is assumed that whoever creates the signal is the thread
      * that will be doing the signalling.
-     * */
+     */
     class Signal {
         public:
             Signal()
@@ -242,36 +239,48 @@ namespace mrutils {
                 mrutils::mutexAcquire(mutex[0]);
             }
 
-            ~Signal() {
+            ~Signal()
+			{
                 mrutils::mutexDelete(mutex[0]);
                 mrutils::mutexDelete(mutex[1]);
             }
 
         public:
 
-            inline bool wait(int secs) {
-                if (mrutils::mutexWaitAcquire(mutex[!pop], secs)) {
+            bool wait(int secs)
+			{
+                if (mrutils::mutexWaitAcquire(mutex[!pop], secs))
+				{
                     pop = !pop;
                     mrutils::mutexRelease(mutex[pop]);
                     return true;
-                } else return false;
+                }
+				else
+				{
+					return false;
+				}
             }
 
-            inline void wait() {
+            void wait()
+			{
                 mrutils::mutexAcquire(mutex[!pop]);
                 pop = !pop;
                 mrutils::mutexRelease(mutex[pop]);
             }
 
-            inline void send() {
-                if (mrutils::mutexTryAcquire(mutex[push])) {
-                    if (pop == push) mrutils::mutexRelease(mutex[push = !push]);
-                    else mrutils::mutexRelease(mutex[push]);
-                } //else mrutils::mutexRelease(mutex[push = !push]);
+            void send()
+			{
+                if (mrutils::mutexTryAcquire(mutex[push]))
+				{
+                    if (pop == push)
+						mrutils::mutexRelease(mutex[push = !push]);
+                    else
+						mrutils::mutexRelease(mutex[push]);
+                }
             }
 
         private:
-            MUTEX mutex[2];
+            mutex_t mutex[2];
             bool push, pop;
     };
 

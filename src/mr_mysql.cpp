@@ -1,5 +1,6 @@
 #include "mr_mysql.h"
-//#define MR_SQL_DEBUG
+#include <pantheios/pantheios.hpp>
+//#define MR_SQL_DEBUG_2
 
 bool mrutils::Mysql::run_(const char * q) {
     if (connected) {
@@ -9,9 +10,8 @@ bool mrutils::Mysql::run_(const char * q) {
         return false;
     }
 
-    #ifdef MR_SQL_DEBUG
-        printf("SQL %d: rowNumber %d query.send(%s)\n",socket->s_,rowNumber,q);
-    #endif
+    pantheios::logprintf(pantheios::debug,
+        "SQL %d: rowNumber %d query.send(%s)\n",socket->s_,rowNumber,q);
 
     query.query = q;
     query.type  = mrutils::mysql::COM_QUERY;
@@ -27,26 +27,34 @@ bool mrutils::Mysql::run_(const char * q) {
 }
 
 bool mrutils::Mysql::connect() {
-    if (socket != NULL) { delete socket; }
+    if (socket != NULL)
+    {
+        pantheios::logprintf(pantheios::debug,
+                "Mysql %d is reconnecting...\n", socket->s_);
+        delete socket, socket = NULL;
+    } else
+    {
+        pantheios::logprintf(pantheios::debug,
+                "New mysql is connecting...\n");
+
+    }
+
     socket = new mrutils::Socket(server.c_str(),port,socketType);
 
-    #ifdef MR_SQL_DEBUG
-        fprintf(stderr,"Mysql is reconnecting...\n"); fflush(stderr);
-    #endif
-
     if (!socket->initClient(10)) {
-        fprintf(stderr,"MySql unable to connect to server at %s:%d\n",server.c_str(),(int)port);
-        fflush(stderr);
+        pantheios::logprintf(pantheios::error,
+                "MySql unable to connect to server at %s:%d\n",
+                server.c_str(),(int)port);
         return false;
     }
 
     reader.use(*socket);
-    writer.use(*socket);
+    writer.setFD(socket->s_);
 
     // receive handshake
     mrutils::mysql::mysql_handshake handshake;
     if (!handshake.read(reader)) return false;
-    
+
     // now build login
     mrutils::mysql::mysql_login login;
 
@@ -59,7 +67,8 @@ bool mrutils::Mysql::connect() {
     login.databaseName = db.c_str();
 
     // send login
-    login.send(writer);
+    if (!login.send(writer))
+        return false;
 
     if (!reply.read(reader)) return false;
     switch (reply.type) {
@@ -67,9 +76,10 @@ bool mrutils::Mysql::connect() {
             errId = reply.data.err.errId;
             errStr = reply.data.err.message;
             error = errStr.c_str();
-            fprintf(stderr,"MySql: login refused at %s:%d, username %s. %d:%s\n"
-                ,server.c_str(),(int)port,username.c_str(),errId,reply.data.err.message);
-            fflush(stderr);
+            pantheios::logprintf(pantheios::error,
+                    "MySql: login refused at %s:%d, username %s. %d:%s\n",
+                    server.c_str(),(int)port,username.c_str(),errId,
+                    reply.data.err.message);
             return false;
         case mrutils::mysql::MT_OK:
             break;
@@ -100,9 +110,10 @@ bool mrutils::Mysql::nextLine() {
                 return false;
             }
 
-            #ifdef MR_SQL_DEBUG
-                fprintf(stderr,"SQL %d result header: ", socket->s_);
-                reply.print(stderr);
+            #ifdef MR_SQL_DEBUG_2
+                pantheios::logprintf(pantheios::debug,
+                        "SQL %d result header: ", socket->s_);
+                reply.log(pantheios::debug);
             #endif
 
             switch (reply.type) {
@@ -140,9 +151,10 @@ bool mrutils::Mysql::nextLine() {
             return false;
         }
 
-        #ifdef MR_SQL_DEBUG
-            printf("SQL %d result row %d: ", socket->s_, rowNumber);
-            reply.print(stdout);
+        #ifdef MR_SQL_DEBUG_2
+            pantheios::logprintf(pantheios::debug,
+                    "SQL %d result row %d: ", socket->s_, rowNumber);
+            reply.log(pantheios::debug);
         #endif
 
         switch (reply.type) {
@@ -193,9 +205,10 @@ bool mrutils::Mysql::get(const char * q, int count, char type_, ...) {
             return false;
         }
 
-        #ifdef MR_SQL_DEBUG
-            printf("SQL %d response to get: ", socket->s_);
-            reply.print(stdout);
+        #ifdef MR_SQL_DEBUG_2
+            pantheios::logprintf(pantheios::debug,
+                    "SQL %d response to get: ", socket->s_);
+            reply.log(pantheios::debug);
         #endif
 
         switch (reply.type) {
@@ -296,24 +309,38 @@ bool mrutils::Mysql::run(const char * q) {
     return false;
 }
 
-bool mrutils::Mysql::dumpTableDesc(const char * table, std::vector<char> * colTypes, std::vector<std::string>* colNames, std::string * priName, const std::vector<std::string> * omitColumns) {
+bool mrutils::Mysql::dumpTableDesc(const char * table,
+        std::vector<char> * colTypes,
+        std::vector<std::string>* colNames,
+        std::string * priName,
+        const std::vector<std::string> * omitColumns)
+{
+    pantheios::log(pantheios::debug,
+            __PRETTY_FUNCTION__," table=",table);
+
     mrutils::stringstream ss;
-    
-    int priCol = -1; 
+
+    int priCol = -1;
 
     rr(ss.clear() << "DESC " << table);
-    for (int colNum = 0; nextLine();) {
+    for (int colNum = 0; nextLine();)
+    {
         char const * type = getString(1);
-        if (omitColumns != NULL && mrutils::containsI(*omitColumns, getString(0))) continue;
+        if (omitColumns != NULL &&
+                mrutils::containsI(*omitColumns, getString(0)))
+            continue;
 
         if (mrutils::startsWithI(type,"int")
             ||mrutils::startsWithI(type,"tinyint")
             ||mrutils::startsWithI(type,"smallint")
             ||mrutils::startsWithI(type,"bit")
-            ) {
+            )
+        {
 
-            if (mrutils::stristr(getString(3),"pri")) {
-                if (priCol != -1) {
+            if (mrutils::stristr(getString(3),"pri"))
+            {
+                if (priCol != -1)
+                {
                     errId = -1;
                     error = "mrutils::Sql dump error; primary column must be a single integer type column.";
                     return false;
@@ -323,7 +350,8 @@ bool mrutils::Mysql::dumpTableDesc(const char * table, std::vector<char> * colTy
                 *priName = getString(0);
 
                 colTypes->push_back('p');
-            } else {
+            } else
+            {
                 colTypes->push_back('d');
             }
         } else if (mrutils::startsWithI(type,"varchar")
@@ -331,13 +359,16 @@ bool mrutils::Mysql::dumpTableDesc(const char * table, std::vector<char> * colTy
             ||mrutils::startsWithI(type,"mediumblob")
             ||mrutils::startsWithI(type,"char")
             ||mrutils::startsWithI(type,"enum")
-            ) {
+            )
+        {
             colTypes->push_back('s');
         } else if (mrutils::startsWithI(type,"double")
             ||mrutils::startsWithI(type,"float")
-            ) {
+            )
+        {
             colTypes->push_back('f');
-        } else {
+        } else
+        {
             errId = -1;
             errStr = "mrutils::Sql::dumpTable unhandled column type: "; errStr += type;
             error = errStr.c_str();
@@ -348,9 +379,11 @@ bool mrutils::Mysql::dumpTableDesc(const char * table, std::vector<char> * colTy
         ++colNum;
     }
 
-    if (priCol == -1) {
+    if (priCol == -1)
+    {
         errId = -1;
-        errStr = "mrutils::Sql dump error, no primary key found for table "; errStr += table;
+        errStr = "mrutils::Sql dump error, no primary key found for table ";
+        errStr += table;
         error = errStr.c_str();
         return false;
     }

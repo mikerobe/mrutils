@@ -17,6 +17,46 @@ bool mrutils::rmR(const char * path, FILE * verboseOut) {
     return rmr.rm(path);
 }
 
+std::string mrutils::makeRelativePath(std::string const &toStr,
+    std::string const &fromStr)
+{
+    std::string::const_iterator to = toStr.begin();
+    std::string::const_iterator from = fromStr.begin();
+
+    while (*to == *from)
+        ++to, ++from;
+
+    int numDirs = 0;
+    while (*from)
+    {
+        if (*from == '/' || *from == '\\')
+        {
+            ++from;
+            ++numDirs;
+            while (*from == '/' || *from == '\\')
+                ++from;
+        } else
+        {
+            ++from;
+        }
+    }
+
+
+    std::string result(numDirs*3 + (toStr.end() - to),'\0');
+    std::string::iterator it = result.begin();
+
+    for (;numDirs > 0;--numDirs)
+    {
+        *it = '.';
+        *++it = '.';
+        *++it = '/';
+        ++it;
+    }
+
+    std::copy(to, toStr.end(), it);
+    return result;
+}
+
 
 bool mrutils::cpR(const char * src, const char * dest, bool replaceSymLinks, int replace, FILE * verboseOut) {
     mrutils::FileCopyRecursive cpr(replaceSymLinks, replace,verboseOut);

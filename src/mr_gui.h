@@ -23,7 +23,7 @@
 
 namespace mrutils {
     namespace gui {
-        extern MUTEX mutex;
+        extern mrutils::mutex_t mutex;
 
         extern const int COL_BLANK    ;
         extern const int ATR_BLANK    ;

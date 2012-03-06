@@ -15,35 +15,25 @@ class _API_ XML {
     public:
         XML()
         : buffer(new char[buffSz])
-        { tagPtr = eob = buffer; }
+        { tagPtr = eob = sob = buffer; }
 
         ~XML() { delete[] buffer; }
 
     public:
-       /**
-        * Returns a string to the URL retrieved. Empty if none.
-        */
-        inline std::string get(mrutils::curl::urlRequest_t& request, int stopFD = -1) {
-            mrutils::curl::curlData_t data;
-            data.buffSz = buffSz;
-            data.buffer = buffer;
-            data.eob = buffer;
-            data.errBuffer = NULL;
+        int get(mrutils::curl::urlRequest_t *request,
+                int stopFD = -1, bool checkRedir = true);
 
-            // DEBUG
-            //std::cerr << "XML getting url: " << request.url << std::endl;
-
-            std::string url = mrutils::curl::getURL(request,data,stopFD);
-            sob = tagPtr = buffer; eob = data.eob;
-            return url;
-        }
+        /**
+         * Reads a local file as if it were coming from the web
+         */
+        void readFile(char const *path);
 
        /**
         * Replace &apos; with ', etc. returns a pointer to the end
         */
         static char * unescapeHTML(char * start, char * end);
 
-        inline int tagCount(const char * tagName) {
+        int tagCount(const char * tagName) {
             std::string str = "<"; str.append(tagName);
             int count = 0;
             for (char * ptr = buffer; NULL != (ptr = mrutils::stristr(ptr,str.c_str())); ++ptr) {
@@ -55,7 +45,7 @@ class _API_ XML {
 
         // strategy: search backward for first <xxx (not </xxx) that doesn't end in />
         // set tagPtr to <xxx and return xxx
-        inline char* prevTag() {
+        char* prevTag() {
             tagText[0] = 0; if (tagPtr == eob) --tagPtr;
 
             if (*tagPtr == '<') {
@@ -75,46 +65,11 @@ class _API_ XML {
             }
         }
 
-        // strategy: search forward for first <xxx (not </xxx) that doesn't end in />
-        // set tagPtr to <xxx and return xxx
-        inline char * nextTag() {
-            tagText[0] = 0; if (tagPtr == eob) return tagText;
+        char * nextTag();
 
-            if (*tagPtr == '<') {
-                if (tagPtr+1 == eob) return tagText;
-                ++tagPtr;
-            }
+        bool next(const char * tagName);
 
-            for (;;++tagPtr) {
-                tagPtr = strchr(tagPtr,'<');
-                if (tagPtr == NULL || tagPtr+1 == eob) { tagPtr = eob; return tagText; }
-                if (*(tagPtr+1) == '/') continue;
-                char * p = strchr(tagPtr,'>');
-                if (p == NULL) { tagPtr = eob; return tagText; }
-                if (*(p-1) == '/') continue;
-                *strncpy(tagText,tagPtr+1,std::min((size_t)127,strcspn(tagPtr+1,"> "))) = 0;
-                return tagText;
-            }
-        }
-
-        inline bool next(const char * tagName) {
-            if (tagPtr == eob || tagPtr+1 == eob) { tagPtr = eob; return false; }
-
-            char start[128];
-            *start = '<'; *mrutils::strncpy(start+1,tagName,126) = 0;
-
-            for (;;++tagPtr) {
-                tagPtr = mrutils::stristr(tagPtr,start);
-                if (tagPtr == NULL) { tagPtr = eob; return false; }
-                if (*(tagPtr+1) == '/') continue;
-                char * p = strchr(tagPtr,'>');
-                if (p == NULL) return false;
-                if (*(p-1) == '/') continue;
-                return true;
-            }
-        }
-
-        inline bool prev(const char * tagName) {
+        bool prev(const char * tagName) {
             if (tagPtr == buffer) return false;
 
             char start[128];
@@ -134,18 +89,19 @@ class _API_ XML {
        /**
         * Returns a pointer to the END of the field
         */
-        inline const char * tag(char * dest, int size) {
+        const char * tag(char * dest, int size) {
             return tagInternal(dest,size,NULL);
         }
 
-        inline void tag(std::string& str) {
+        void tag(std::string& str) {
             tagInternal(NULL,0,&str);
         }
 
-        inline int size() { return (eob - buffer); }
+        int size() { return (eob - buffer); }
 
     public:
         char *tagPtr, *eob, *sob;
+        std::string m_url;
 
         static const int buffSz = 1024*1024; // 1MB
 
