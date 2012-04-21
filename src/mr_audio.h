@@ -7,9 +7,9 @@
 #if defined(__APPLE__)
     // mac includes
     #include <AudioToolbox/AudioToolbox.h>
-    #include "CAXException.h"
-    #include "CAStreamBasicDescription.h"
-    #include "CAAudioUnit.h"
+    #include "PublicUtility/CAXException.h"
+    #include "PublicUtility/CAStreamBasicDescription.h"
+    #include "PublicUtility/CAAudioUnit.h"
 #elif defined(__LINUX__)
     #include <sox.h>
 #endif

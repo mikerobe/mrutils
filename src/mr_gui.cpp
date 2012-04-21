@@ -76,12 +76,20 @@ namespace mrutils {
         const int ATR_HB       = A_NORMAL | COLOR_PAIR(COL_HB      );
         const int ATR_XB       = A_NORMAL | COLOR_PAIR(COL_XB      );
 
-        void init() {
+        void init(int lines, int cols) {
             if (!init_) {
                 mrutils::mutexAcquire(guiInitMutex);
                 if (!init_) {
                     mrutils::SignalHandler::priv::destroy.func = &closeFunc;
                     mrutils::SignalHandler::setSingleCharStdin(fileno(tty));
+
+					if (lines != 0 && cols != 0)
+					{
+						// doesn't work reliably
+						// resize_term(lines, cols);
+						std::cout << "\033[8;" << lines << ";" << cols << "t"
+							<< std::flush;
+					}
 
                     // have to manually set enviro vars for ncurses
                     int slines=0, scols=0;

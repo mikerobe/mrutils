@@ -75,7 +75,7 @@ namespace mrutils {
         extern int _ACS_VLINE;
         extern int _ACS_HLINE;
 
-        void init();
+        void init(int lines=0, int cols=0);
         void setTermTitle(const char * title);
         void mrefresh(void * win = NULL);
         void forceClearScreen(bool cursor = false);

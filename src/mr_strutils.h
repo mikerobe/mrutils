@@ -461,6 +461,8 @@ namespace mrutils {
         } return str;
     }
 
+	std::string escapeHTML(std::string const &str);
+
     inline char * replace(char * str, char r, const char * w, char * buf) {
         char * s = strchr(str, r); if (s == NULL) return str;
 

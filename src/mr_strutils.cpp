@@ -84,6 +84,43 @@ std::string mrutils::formURL(const char * baseURL, const char * relative) {
     return result;
 }
 
+/**
+ * TODO: this function could be more efficient -- instead of searching
+ * one by one, just search for a char that needs to be escaped and push
+ * in chunks
+ */
+std::string mrutils::escapeHTML(std::string const &str)
+{
+	std::string result;
+	result.reserve(str.size() + (str.size() >> 1));
+	for (std::string::const_iterator strIt = str.begin();
+			strIt != str.end(); ++strIt)
+	{
+		switch (*strIt)
+		{
+			default:
+				result.append(1, *strIt);
+				break;
+			case '&':
+				result.append("&amp;");
+				break;
+			case '"':
+				result.append("&quot;");
+				break;
+			case '\'':
+				result.append("&apos;");
+				break;
+			case '<':
+				result.append("&lt;");
+				break;
+			case '>':
+				result.append("&gt;");
+				break;
+		}
+	}
+	return result;
+}
+
 char* mrutils::copyMacToAscii(char * to, const int sz, const char * from, const bool stripCR) {
     const char * const end = to + sz;
 

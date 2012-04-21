@@ -85,14 +85,14 @@ endif
 ######### AUDIO
 ifeq ($(PLATFORM),Darwin)
 	SOURCES_OTHER += \
-		/Developer/Extras/CoreAudio/PublicUtility/CAStreamBasicDescription.cpp \
-		/Developer/Extras/CoreAudio/PublicUtility/CAXException.cpp \
-		/Developer/Extras/CoreAudio/PublicUtility/CAAudioUnit.cpp \
-		/Developer/Extras/CoreAudio/PublicUtility/CAComponent.cpp \
-		/Developer/Extras/CoreAudio/PublicUtility/CAComponentDescription.cpp \
-		/Developer/Extras/CoreAudio/PublicUtility/AUOutputBL.cpp \
-		/Developer/Extras/CoreAudio/PublicUtility/CAAudioChannelLayout.cpp \
-		/Developer/Extras/CoreAudio/PublicUtility/CAAudioChannelLayoutObject.cpp \
+		PublicUtility/CAStreamBasicDescription.cpp \
+		PublicUtility/CAXException.cpp \
+		PublicUtility/CAAudioUnit.cpp \
+		PublicUtility/CAComponent.cpp \
+		PublicUtility/CAComponentDescription.cpp \
+		PublicUtility/AUOutputBL.cpp \
+		PublicUtility/CAAudioChannelLayout.cpp \
+		PublicUtility/CAAudioChannelLayoutObject.cpp \
 		stacktrace_mac.cpp \
 
 	CFLAGS+= -I/Developer/Extras/CoreAudio/PublicUtility/
@@ -134,24 +134,17 @@ all: $(OBJECTS)
 	$(CC) $(OBJECTS) $(LFLAGS) -dynamiclib -o "$(OUTPUT_DIR)/libmrutils.${DYLIB}"
 	cd ../src && ./maketags.sh && cd -
 
-$(O)//Developer/Extras/CoreAudio/PublicUtility/CAStreamBasicDescription.o:
-	$(CC) $(CFLAGS) -c /Developer/Extras/CoreAudio/PublicUtility/CAStreamBasicDescription.cpp $< -o $@
-$(O)//Developer/Extras/CoreAudio/PublicUtility/CAXException.o:
-	$(CC) $(CFLAGS) -c /Developer/Extras/CoreAudio/PublicUtility/CAXException.cpp $< -o $@
-$(O)//Developer/Extras/CoreAudio/PublicUtility/CAAudioUnit.o:
-	$(CC) $(CFLAGS) -c /Developer/Extras/CoreAudio/PublicUtility/CAAudioUnit.cpp $< -o $@
-$(O)//Developer/Extras/CoreAudio/PublicUtility/CAComponent.o:
-	$(CC) $(CFLAGS) -c /Developer/Extras/CoreAudio/PublicUtility/CAComponent.cpp $< -o $@
-$(O)//Developer/Extras/CoreAudio/PublicUtility/CAComponentDescription.o:
-	$(CC) $(CFLAGS) -c /Developer/Extras/CoreAudio/PublicUtility/CAComponentDescription.cpp $< -o $@
-$(O)//Developer/Extras/CoreAudio/PublicUtility/AUOutputBL.o:
-	$(CC) $(CFLAGS) -c /Developer/Extras/CoreAudio/PublicUtility/AUOutputBL.cpp $< -o $@
-$(O)//Developer/Extras/CoreAudio/PublicUtility/CAAudioChannelLayout.o:
-	$(CC) $(CFLAGS) -c /Developer/Extras/CoreAudio/PublicUtility/CAAudioChannelLayout.cpp $< -o $@
-$(O)//Developer/Extras/CoreAudio/PublicUtility/CAAudioChannelLayoutObject.o:
-	$(CC) $(CFLAGS) -c /Developer/Extras/CoreAudio/PublicUtility/CAAudioChannelLayoutObject.cpp $< -o $@
+$(OBJECTS) : | dirs
+
+.PHONY: dirs
+
+dirs:
+	@mkdir -p $O/PublicUtility
 
 $(O)/%.o: $(S)/%.cpp
+	$(CC) $(CFLAGS) -c $< -o "$@"
+
+$(O)/PublicUtility/%.o: $(S)/PublicUtility/%.cpp
 	$(CC) $(CFLAGS) -c $< -o "$@"
 
 clean:
