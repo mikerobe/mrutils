@@ -135,17 +135,17 @@ bool mrutils::GuiScroll::readFrom(const char * path, int startLine, const char *
 
         int startRow = header, startCol = 0;
 
-        using namespace mrutils::SignalHandler;
+        namespace sh = mrutils::SignalHandler;
 
-        for (int c;'q' != (c = getch());) {
+        for (int c;'q' != (c = sh::getch());) {
             if (c == ';') break;
             switch (c) {
                 case 27:
-                    if (91 == getch()) { // escape sequence
-                        if (77 == getch()) { // mouse
-                            c = getch();
-                            getch(); // x + 33
-                            const int y = getch() - 33; // y + 33
+                    if (91 == sh::getch()) { // escape sequence
+                        if (77 == sh::getch()) { // mouse
+                            c = sh::getch();
+							sh::getch(); // x + 33
+                            const int y = sh::getch() - 33; // y + 33
                             switch (c) {
                                 case 34: // secondary down
                                     mvwchgat((WINDOW*)pad,startRow-header + y,0,cols,0,0, NULL);

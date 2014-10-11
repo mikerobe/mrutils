@@ -47,7 +47,7 @@ bool mrutils::Sqlite::dumpTableDesc(const char * table, std::vector<char> * colT
         colNames->push_back(colName);
 
         for (p = r+1;*p == ' ' || *p == '\t' || p == q;++p) ;
-        for (r = p;*r != ' ' && *r != '\t' && r != '\0';++r) ;
+        for (r = p;*r != ' ' && *r != '\t' && *r != '\0';++r) ;
 
         if (mrutils::startsWithI(p,"int")
             ||mrutils::startsWithI(p,"tinyint")

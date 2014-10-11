@@ -1,7 +1,7 @@
 PLATFORM=$(shell uname -s)
 
 ifeq ($(PLATFORM),Darwin)
-	FAST=-fast -DNDEBUG
+	FAST=-O3 -DNDEBUG
 else
 	FAST=-O3 -DNDEBUG
 endif
@@ -72,12 +72,12 @@ SOURCES_OTHER =
 S = ../src/
 O = objects/$(shell uname -s)
 
-CC=g++
+CC=clang++
 CFLAGS=-I$(HOME)/include/stlsoft -pipe -D BUILD_DLL -D OK_OUTSIDE_LIBS $(DEBUG) -Wall -Wextra -Woverloaded-virtual\
-	-I/usr/X11/include
+	-I/usr/X11/include -std=c++11 -stdlib=libc++ -fcolor-diagnostics
 LFLAGS= -fpic -shared -undefined suppress -flat_namespace -fvisibility=hidden -lX11 -lncurses -lX11 -ljpeg -lpng -lz -lsqlite3
 
-OUTPUT_DIR=${HOME}/local/${MACHTYPE}/lib
+OUTPUT_DIR=${HOME}/local/${MACHTYPE_}/lib
 ifneq ($(findstring cygwin,${OSTYPE}),)
 	OUTPUT_DIR=/usr/bin
 endif
@@ -113,12 +113,12 @@ endif
 #endif
 
 ######## GNU TLS (secure sockets)
-	SOURCES_OTHER += \
-		mr_sendmail.cpp \
-		mr_imap.cpp \
-
-	LFLAGS+= -L/usr/bin -lgcrypt -lgsasl -lgnutls -lgnutls-extra -lgpg-error #-liconv 
-	CFLAGS+= -D MR_GNUTLS
+#	SOURCES_OTHER += \
+#		mr_sendmail.cpp \
+#		mr_imap.cpp \
+#
+#	LFLAGS+= -L/usr/bin -lgcrypt -lgsasl -lgnutls -lgnutls-extra -lgpg-error #-liconv 
+#	CFLAGS+= -D MR_GNUTLS
 
 # determine whether to compile 64 bit or 32
 ifeq ($(shell uname -m),x86_64)

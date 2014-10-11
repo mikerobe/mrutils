@@ -21,7 +21,6 @@
     #define snprintf _snprintf
 #endif
 
-
 // compile-time strlen for string literals
 template<size_t N>
 inline size_t ctlen(char const (&)[N]) { return (N-1); }
@@ -144,7 +143,7 @@ namespace mrutils {
     inline void trim(std::string& str) {
         const char * sob = str.c_str();
         const char * p = sob;
-        for (;p != '\0' && isspace(*p);++p){}
+        for (;*p != '\0' && isspace(*p);++p){}
         if (p != sob) str.erase(0,p - sob);
 
         p = sob + str.size();

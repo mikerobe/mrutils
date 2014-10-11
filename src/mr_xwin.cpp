@@ -154,9 +154,19 @@ void mrutils::XWin::waitQuit() {
                 break;
             case KeyPress:
                 if (event.xkey.window == win) {
-                    switch (XLookupKeysym (&event.xkey, 0)) {
+                    switch (int const key = XLookupKeysym (&event.xkey, 0)) {
                         case XK_semicolon:
-                        case XK_q: done = true; break;
+							this->exitKey = ';';
+							done = true;
+							break;
+                        case XK_q:
+							this->exitKey = 'q';
+							done = true;
+							break;
+						case XK_Return:
+							this->exitKey = '\n';
+							done = true;
+							break;
                         case XK_s:
                             mrutils::mutexAcquire(winMutex);
                                 if (saveImg != NULL) {
@@ -168,7 +178,8 @@ void mrutils::XWin::waitQuit() {
                                 }
                             mrutils::mutexRelease(winMutex);
                             break;
-                        default: break;
+                        default:
+							break;
                     }
                 }
                 break;

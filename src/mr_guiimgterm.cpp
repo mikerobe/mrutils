@@ -11,7 +11,7 @@ mrutils::ImgTerm::ImgTerm(int y0, int x0, int rows, int cols, bool border)
  ,fg(0), bg(0)
  ,paddingTop(0), paddingLeft(0), paddingBottom(0), paddingRight(0)
  ,disp(XOpenDisplay(NULL))
- ,screen(DefaultScreen(disp))
+ ,screen(disp ? DefaultScreen(disp) : 0)
  ,border(border)
 {
     // total window dimensions
@@ -22,8 +22,9 @@ mrutils::ImgTerm::ImgTerm(int y0, int x0, int rows, int cols, bool border)
     winCols = cols > 0?cols :sCols  + cols;
 
     // identify the window
-    if (!mrutils::x11::findTermWindow(disp,&win,&parent,&pxWidth,&pxHeight)) {
+    if (!disp || !mrutils::x11::findTermWindow(disp,&win,&parent,&pxWidth,&pxHeight)) {
         std::cerr << "Error: " <<  __func__ << " can't find x11 window" << std::endl;
+        abort();
         return;
     }
 
@@ -46,7 +47,11 @@ mrutils::ImgTerm::ImgTerm(int y0, int x0, int rows, int cols, bool border)
     pxWidth  -= offset_x; if (winCols < sCols  - x0) pxWidth  -= paddingRight + (sCols-x0-winCols)*pxCol;
 
     // window graphics
-    if (NULL == (gc = XCreateGC(disp, parent, 0, NULL))) return;
+    if (NULL == (gc = XCreateGC(disp, parent, 0, NULL))) {
+        std::cerr << "Can't create window graphics." << std::endl;
+        abort();
+        return;
+    }
 
     good = true;
 
@@ -69,7 +74,8 @@ mrutils::ImgTerm::~ImgTerm() {
         XFreePixmap(disp, pixmap);
     }
 
-    if (disp) XCloseDisplay(disp);
+    if (disp)
+		XCloseDisplay(disp);
 }
 
 void mrutils::ImgTerm::drawEllipse(unsigned color, int x, int y, int w, int h) {

@@ -203,6 +203,7 @@ namespace mysql {
                     status);
         }
 
+		#ifdef HAVE_PANTHEIOS
         inline void log(pantheios::pan_severity_t severity)
         {
             pantheios::logprintf(severity,"length: %d\n"
@@ -220,6 +221,7 @@ namespace mysql {
                     (int)language,
                     status);
         }
+		#endif
 
         inline bool read(mrutils::BufferedReader& reader) {
             header.read(reader);

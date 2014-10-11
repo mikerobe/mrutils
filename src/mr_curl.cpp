@@ -3,7 +3,9 @@
 #include "mr_sockets.h"
 #include "mr_set.h"
 #include "mr_bufferedreader.h"
-#include <pantheios/pantheios.hpp>
+#ifdef HAVE_PANTHEIOS
+	#include <pantheios/pantheios.hpp>
+#endif
 
 #ifdef OK_OUTSIDE_LIBS
 #include "mr_gzipreader.h"
@@ -146,9 +148,11 @@ namespace {
 
             if (i == (int)sizeof(data.buffer)) {
                 data.buffer[15] = '\0';
+				#ifdef HAVE_PANTHEIOS
                 pantheios::log(pantheios::error,
                     "invalid chunked data size: ",
                     data.buffer);
+				#endif
                 return 0;
             }
 
@@ -196,9 +200,11 @@ namespace {
         if (0!=strncmp(reader.line,"HTTP",4)
             || NULL == (p = strchr(reader.line,' ')))
         {
+			#ifdef HAVE_PANTHEIOS
             pantheios::logprintf(pantheios::error,
                 "mrutils::curl %s:%d received invalid response from %s: %s",
                 __FILE__,__LINE__,url,reader.line);
+			#endif
             return -1;
         }
 
@@ -208,9 +214,11 @@ namespace {
 
         switch (*++p) {
             case '1': // informational. no content
+				#ifdef HAVE_PANTHEIOS
                 pantheios::log(pantheios::notice,
                         "mrutils::curl pure information reply to ",
                         url);
+				#endif
                 break;
 
             case '2': // success
@@ -230,9 +238,11 @@ namespace {
                 } 
 
             default: // 5 (server error)
+				#ifdef HAVE_PANTHEIOS
                 pantheios::logprintf(pantheios::notice,
                     "mrutils::curl got error code %c%c%c from %s",
                     *p, *(p+1), *(p+2), url);
+				#endif
                 break;
         }
 
@@ -262,9 +272,11 @@ namespace {
         //std::cout << std::endl;
 
         if (data->redirected && data->location.empty()) {
+			#ifdef HAVE_PANTHEIOS
             pantheios::log(pantheios::notice,
                     "mrutils::curl got redirected with no location from ",
                     url);
+			#endif
             return false;
         }
 
@@ -285,24 +297,30 @@ namespace {
 
         if (request->url.empty())
         {
+			#ifdef HAVE_PANTHEIOS
             pantheios::log(pantheios::notice,
                     "mrutils::curl attempt to call getURL on empty URL");
+			#endif
             return __LINE__;
         }
 
         if (!mrutils::startsWithI(request->url.c_str(),"http://"))
         {
+			#ifdef HAVE_PANTHEIOS
             pantheios::log(pantheios::error,
                     "mrutils::curl can't handle non-http url: ",
                     request->url);
+			#endif
             return __LINE__;
         }
 
         if (redirCount > 5)
         {
+			#ifdef HAVE_PANTHEIOS
             pantheios::logprintf(pantheios::error,
                     "mrutils::curl too many redirects (%d) for url: %s",
                     redirCount, request->url.c_str());
+			#endif
             return __LINE__;
         }
 
@@ -318,16 +336,20 @@ namespace {
         std::replace(request->url.begin(), request->url.end(), ' ', '+');
         if (request->url.size() > sizeof(buffer))
         {
+			#ifdef HAVE_PANTHEIOS
             pantheios::log(pantheios::error,
                     "mrutils::curl URL is too long: ",
                     request->url);
+			#endif
             return __LINE__;
         }
         strcpy(buffer,request->url.c_str());
 
+		#ifdef HAVE_PANTHEIOS
         pantheios::log(pantheios::informational,
                 "mrutils::curl request: ",
                 request->url);
+		#endif
 
         char *host = buffer + strlen("http://");
         char *file = strchr(host,'/');
@@ -371,17 +393,21 @@ Connection: close\r\n\
         mrutils::Socket sock(host,port);
         if (!sock.initClient(5,stopFD))
         {
+			#ifdef HAVE_PANTHEIOS
             pantheios::log(pantheios::error,
                     "mrutils::curl can't connect to: ",
                     host);
+			#endif
             return -1;
         }
 
         if ((int)ss.str().size() != sock.write(ss.c_str(), ss.str().size()))
         {
+			#ifdef HAVE_PANTHEIOS
             pantheios::log(pantheios::error,
                     "mrutils::curl got disonnected sending request to:",
                     host);
+			#endif
             return -1;
         }
 
@@ -421,9 +447,11 @@ Connection: close\r\n\
 
         if (header.chunked)
         {
+			#ifdef HAVE_PANTHEIOS
             pantheios::log(pantheios::error,
                     "mrutils::curl sent HTTP/1.0 protocol, got chunked data back from host: ",
                     host);
+			#endif
             return -1;
         }
 
@@ -442,9 +470,11 @@ Connection: close\r\n\
                 for (int r, size = data->buffSz; size > 0 && 0 != (r = gz.read(data->eob,size)); data->eob += r, size -= r)
                     if (r < 0)
                     {
+						#ifdef HAVE_PANTHEIOS
                         pantheios::log(pantheios::error,
                                 "mrutils::curl error gunzipping file from host: ",
                                 host);
+						#endif
                         return -1;
                     }
                 *data->eob = '\0';
@@ -459,9 +489,11 @@ Connection: close\r\n\
                 if (data != NULL) {
                     len = reader.read(0); reader.switchBuffer(data->buffer);
                     if (len < 0 || 0 > (len = reader.read(reader.bufSize))) {
+						#ifdef HAVE_PANTHEIOS
                         pantheios::logprintf(pantheios::error,
                                 "mrutils::curl %s:%d error getting data for %s",
                                 __FILE__,__LINE__,request->url.c_str());
+						#endif
                         return -1;
                     } *(data->eob = data->buffer + len) = '\0';
                 } else {
@@ -473,10 +505,12 @@ Connection: close\r\n\
                     // retrieve partial if too big
                     if (header.length > reader.bufSize)
                     {
+						#ifdef HAVE_PANTHEIOS
                         pantheios::logprintf(pantheios::warning,
                                 "mrutils::curl %s:%d page at %s is bigger than buffer (%d)",
                                 __FILE__,__LINE__,request->url.c_str(),
                                 reader.bufSize);
+						#endif
                         header.length = reader.bufSize;
                     }
 
@@ -484,9 +518,11 @@ Connection: close\r\n\
                     reader.switchBuffer(data->buffer);
                     if (header.length != reader.read(header.length))
                     {
+						#ifdef HAVE_PANTHEIOS
                         pantheios::logprintf(pantheios::error,
                                 "mrutils::curl %s:%d error getting data for %s",
                                 __FILE__,__LINE__,request->url.c_str());
+						#endif
                         return -1;
                     } *(data->eob = data->buffer + header.length) = '\0';
                 } else {
@@ -494,9 +530,11 @@ Connection: close\r\n\
                         if (header.length < l) l = header.length;
                         if (l != reader.read(l))
                         {
+							#ifdef HAVE_PANTHEIOS
                             pantheios::logprintf(pantheios::error,
                                 "mrutils::curl %s:%d got disconnected reading from host: %s",
                                 __FILE__, __LINE__, host);
+							#endif
                             return -1;
                         } dataM->content.write(reader.line,l);
                     }
@@ -528,8 +566,10 @@ int mrutils::curl::getMultiple(std::set<urlRequestM_t> const &requests_,
 {
     if (requests_.empty())
     {
+		#ifdef HAVE_PANTHEIOS
         pantheios::log(pantheios::warning,
             __PRETTY_FUNCTION__, " call with empty request");
+		#endif
         return 0;
     }
 
@@ -579,9 +619,11 @@ int mrutils::curl::getMultiple(std::set<urlRequestM_t> const &requests_,
             host.assign(p,q-p);
 
 
+		#ifdef HAVE_PANTHEIOS
         pantheios::log(pantheios::informational,
                 "mrutils::curl ",__PRETTY_FUNCTION__," request: ",
                 host,"/...");
+		#endif
 
         for (; end != requests.end(); ++end)
         {
@@ -634,9 +676,11 @@ int mrutils::curl::getMultiple(std::set<urlRequestM_t> const &requests_,
 
         if (!sock.initClient(5,stopFD))
         {
+			#ifdef HAVE_PANTHEIOS
             pantheios::log(pantheios::error,
                     "mrutils::curl ",__PRETTY_FUNCTION__,
                     " can't connect to host: ", host);
+			#endif
             continue;
         }
 
@@ -644,9 +688,11 @@ int mrutils::curl::getMultiple(std::set<urlRequestM_t> const &requests_,
         if (sock.write(requestStr.c_str(), requestStr.size())
                 != (int)requestStr.size())
         {
+			#ifdef HAVE_PANTHEIOS
             pantheios::logprintf(pantheios::error,
                 "mrutils::curl %s:%d got disconnected reading from host: %s",
                 __FILE__, __LINE__, host.c_str());
+			#endif
             continue;
         }
 
@@ -716,10 +762,12 @@ int mrutils::curl::getMultiple(std::set<urlRequestM_t> const &requests_,
 
                     reader.use(sock,false);
                     if (!chunkData.finish(reader)) {
+						#ifdef HAVE_PANTHEIOS
                         pantheios::log(pantheios::error,
                             "mrutils::curl chunked data error: "
                             "line isn't 0 at ", reader.line, " url: ",
                             (*it)->url);
+						#endif
                         break;
                     }
                 } else {
@@ -733,9 +781,11 @@ int mrutils::curl::getMultiple(std::set<urlRequestM_t> const &requests_,
             } else {
                 if (skipContent) {
                     if (!reader.skip(header.length)) {
+						#ifdef HAVE_PANTHEIOS
                         pantheios::logprintf(pantheios::error,
                             "mrutils::curl %s:%d got disconnected reading from host: %s",
                             __FILE__, __LINE__, host.c_str());
+						#endif
                         break;
                     }
                 } else {
@@ -744,9 +794,11 @@ int mrutils::curl::getMultiple(std::set<urlRequestM_t> const &requests_,
                     for (int l = reader.unreadOnBuffer();header.length > 0;header.length -= l, l = reader.bufSize) {
                         if (header.length < l) l = header.length;
                         if (l != reader.read(l)) {
+							#ifdef HAVE_PANTHEIOS
                             pantheios::logprintf(pantheios::error,
                                 "mrutils::curl %s:%d got disconnected reading from host: %s",
                                 __FILE__, __LINE__, host.c_str());
+							#endif
                             good = false;
                             break;
                         }

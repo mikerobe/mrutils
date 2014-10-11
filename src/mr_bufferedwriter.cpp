@@ -1,7 +1,9 @@
 #include <errno.h>
 #include "mr_bufferedwriter.h"
-#include <pantheios/pantheios.hpp>
-#include <pantheios/inserters.hpp>
+#ifdef HAVE_PANTHEIOS
+	#include <pantheios/pantheios.hpp>
+	#include <pantheios/inserters.hpp>
+#endif
 
 #ifndef O_BINARY
 #   define O_BINARY 0
@@ -344,8 +346,10 @@ struct BufferedWriter::buffer * BufferedWriter::nextBuffer()
 void BufferedWriter::pushOutput(struct buffer *buffer, size_t size)
         throw (mrutils::ExceptionNoSuchData)
 {
+	#ifdef HAVE_PANTHEIOS
     pantheios::log(pantheios::debug,
             __PRETTY_FUNCTION__," ", pantheios::integer(size));
+	#endif
 
     if (size == 0)
         return;
@@ -395,9 +399,11 @@ void BufferedWriter::pushRight(struct buffer *buffer, size_t size)
         int const written = ::write(m_fd,
                 buffer->m_data + buffer->m_head, size);
 
+		#ifdef HAVE_PANTHEIOS
         pantheios::log(pantheios::debug,
                 __PRETTY_FUNCTION__, " wrote ", pantheios::integer(written),
                 " to ", pantheios::integer(m_fd));
+		#endif
 
         if (written <= 0)
         {
@@ -436,9 +442,11 @@ bool BufferedWriter::canPush() const
 
     if (ret < 0)
     {
+		#ifdef HAVE_PANTHEIOS
         pantheios::log(pantheios::error,
                 __PRETTY_FUNCTION__, " error ", pantheios::integer(errno),
                 ": ", strerror(errno));
+		#endif
         return false;
     }
 

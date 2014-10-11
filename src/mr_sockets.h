@@ -13,13 +13,6 @@
 
     #define UINT64_MAX 18446744073709551615ULL
 #else
-    #define _MR_IS_UNIX
-    #define SOCKET int
-    #define ioctlsocket ioctl
-    #define closesocket close
-    #define TIMEVAL struct timeval
-    #define INVALID_SOCKET -1
-    #define SOCKET_ERROR -1
     #include <sys/types.h>
     #include <sys/ioctl.h>
     #include <sys/socket.h>
@@ -29,6 +22,15 @@
     #include <stdio.h>
     #include <stdlib.h>
     #include <sys/un.h>
+	#include <fcntl.h> // open
+	#include <unistd.h> // close
+	#define _MR_IS_UNIX
+	#define SOCKET int
+	#define ioctlsocket ioctl
+	#define closesocket close
+	#define TIMEVAL struct timeval
+	#define INVALID_SOCKET -1
+	#define SOCKET_ERROR -1
 #endif
 
 typedef unsigned long long uint64_t;
@@ -58,11 +60,6 @@ typedef   signed char       int8_t;
 #include <sstream>
 #include <iostream>
 #include <signal.h>
-
-#if defined(_MR_IMAP_H) && !defined(MR_GNUTLS)
-    // gnutls required if using imap
-    #define MR_GNUTLS
-#endif
 
 #if defined(MR_GNUTLS)
     #define ssize_t long
@@ -303,7 +300,7 @@ class _API_ Socket {
         ************************/
 
         inline Socket* accept(const int secTimeout = -1) {
-            if (!waitRead(secTimeout)) return false;
+            if (!waitRead(secTimeout)) return NULL;
             int s = ::accept(s_, NULL, NULL);
             if (s < 0) return NULL;
             return new Socket(serverIP.c_str(), ntohs(addr.sin_port), s, type, true);

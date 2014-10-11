@@ -1,7 +1,9 @@
 #include "mr_sockets.h"
 #include "mr_files.h"
-#include <pantheios/pantheios.hpp>
-#include <pantheios/inserters.hpp>
+#ifdef HAVE_PANTHEIOS
+	#include <pantheios/pantheios.hpp>
+	#include <pantheios/inserters.hpp>
+#endif
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__TOS_WIN__)
     #define EISCONN WSAEISCONN
@@ -46,8 +48,10 @@ bool mrutils::Socket::setBlocking(bool tf) {
         WSAData info; 
         int err = WSAStartup(MAKEWORD(2,0), &info);
         if (err != 0) {
+			#ifdef HAVE_PANTHEIOS
             pantheios::logprintf(pantheios::critical,
                     "WSAStartup had erro code: %d\n",err);
+			#endif
         }
     } static bool initWSA_ = initWSA();
 #else
@@ -227,8 +231,10 @@ bool mrutils::Socket::initClient(const int seconds, const int stopFD) {
             // resolve host
             hostent *host = NULL;
             for (int i = 0; NULL == (host = gethostbyname(serverIP.c_str())); ++i) {
+				#ifdef HAVE_PANTHEIOS
                 pantheios::log(pantheios::error,
                     __PRETTY_FUNCTION__, " can't resolve host: ", serverIP);
+				#endif
                 if (i >= seconds) return (connected = false); 
 
                 // sleep 1 second
@@ -371,9 +377,11 @@ bool mrutils::Socket::initClient(const int seconds, const int stopFD) {
 
         // check that GNUTLS is initialized
         if (!gcry_control (GCRYCTL_INITIALIZATION_FINISHED_P)) {
+			#ifdef HAVE_PANTHEIOS
             pantheios::log(pantheios::critical,
                     __FILE__,":",pantheios::integer(__LINE__)," "
                     "GnuTLS must be initialized first by the application.");
+			#endif
             return false;
         }
 
@@ -397,10 +405,12 @@ bool mrutils::Socket::initClient(const int seconds, const int stopFD) {
         ret = gnutls_priority_set_direct (session, (isSRP?"NORMAL:+SRP":"PERFORMANCE:!ARCFOUR-128"), &err);
         if (ret < 0) {
             if (ret == GNUTLS_E_INVALID_REQUEST) {
+				#ifdef HAVE_PANTHEIOS
                 pantheios::logprintf(pantheios::error,
                         "%s %s:%d Syntax error at: %s\n",
                         __PRETTY_FUNCTION__,
                         __FILE__,__LINE__,err);
+				#endif
             }
             return false;
         }
@@ -408,10 +418,12 @@ bool mrutils::Socket::initClient(const int seconds, const int stopFD) {
         /* Protocol priorities */ 
         ret = gnutls_protocol_set_priority(session, priorityProtocols);
         if (ret < 0) {
+			#ifdef HAVE_PANTHEIOS
             pantheios::logprintf(pantheios::error,
                     "%s %s:%d unable to set proto priority: %d",
                     __PRETTY_FUNCTION__,
                     __FILE__,__LINE__,ret);
+			#endif
             return false;
         }
 
@@ -432,11 +444,13 @@ bool mrutils::Socket::initClient(const int seconds, const int stopFD) {
         /* Perform the TLS handshake */
         ret = gnutls_handshake (session);
         if (ret < 0) {
+			#ifdef HAVE_PANTHEIOS
             pantheios::logprintf(pantheios::error,
                     "%s %s:%d handshake failed (%d): %s",
                     __PRETTY_FUNCTION__,
                     __FILE__,__LINE__,ret,
                     gnutls_strerror(ret));
+			#endif
             return false;
         }
 

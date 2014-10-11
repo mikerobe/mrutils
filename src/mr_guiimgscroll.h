@@ -9,10 +9,36 @@
 namespace mrutils {
 
     class GuiImgScroll {
-        struct line_t;
+	private:
+		struct imgdata_t {
+			mrutils::ImageDecode* img;
+			int keyNum, x, startLine;
+			imgdata_t() : keyNum(-1) { }
+		};
+		
+		struct line_t {
+			const char * const prefix, * const suffix;
+			imgdata_t * const img;
+			
+			inline line_t(imgdata_t * img)
+			: prefix(""), suffix(""), img(img)
+			{}
+			
+			inline line_t(const char * const line)
+			: prefix(line), suffix(""), img(NULL)
+			{}
+			
+			inline line_t(imgdata_t* img, const char * const prefix, const char * const suffix)
+			: prefix(prefix), suffix(suffix), img(img)
+			{}
+			
+			inline bool matchesSearch(const char * const search) {
+				return (mrutils::stristr(prefix,search) || mrutils::stristr(suffix,search));
+			}
+		};
 
         public:
-            GuiImgScroll() 
+            GuiImgScroll()
             : wrapLines(false)
             { searchStr.reserve(128); }
 
@@ -74,11 +100,6 @@ namespace mrutils {
 
             mrutils::map<char, callFunc> callFns;
 
-            struct imgdata_t {
-                mrutils::ImageDecode* img;
-                int keyNum, x, startLine;
-                imgdata_t() : keyNum(-1) { }
-            };
 
             std::list<imgdata_t> imgData;
             std::vector<mrutils::ImageDecode*> images;
@@ -86,26 +107,7 @@ namespace mrutils {
             typedef std::vector<std::pair<std::string, std::string> > xattributes_T;
             xattributes_T xattributes;
             
-            struct line_t {
-                const char * const prefix, * const suffix;
-                imgdata_t * const img;
 
-                inline line_t(imgdata_t * img) 
-                : prefix(""), suffix(""), img(img) 
-                {}
-
-                inline line_t(const char * const line)
-                : prefix(line), suffix(""), img(NULL)
-                {}
-
-                inline line_t(imgdata_t* img, const char * const prefix, const char * const suffix)
-                : prefix(prefix), suffix(suffix), img(img)
-                {}
-
-                inline bool matchesSearch(const char * const search) {
-                    return (mrutils::stristr(prefix,search) || mrutils::stristr(suffix,search));
-                }
-            };
             std::deque<line_t> lines;
             std::deque<line_t>::iterator topLine, bottomLine;
             int gutter;

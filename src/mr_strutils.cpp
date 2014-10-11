@@ -264,7 +264,7 @@ char* mrutils::copyToAscii(char * to, const int sz, const char * from, const boo
                             case 0xa6: *to++ = '|'; break;
                             case 0xa7: *to++ = 'S'; break;
                             case 0xa9: *to++ = 'c'; break;
-                            case 0xab: *to++ = '['; break;
+                            case 0xab: *to++ = '<'; break;
                             case 0xae: *to++ = 'R'; break;
                             case 0xaf: *to++ = '-'; break;
                             case 0xb1: if (to < end-1) { *to++ = '+'; *to++ = '-'; } else { *to = '\0'; return to; } break;
@@ -276,7 +276,7 @@ char* mrutils::copyToAscii(char * to, const int sz, const char * from, const boo
                             case 0xb7: *to++ = '*'; break;
                             case 0xb8: *to++ = ','; break;
                             case 0xb9: *to++ = '1'; break;
-                            case 0xbb: *to++ = ']'; break;
+                            case 0xbb: *to++ = '>'; break;
                         }
                         break;
                     case 0xc3:
@@ -533,6 +533,7 @@ char* mrutils::copyToAscii(char * to, const int sz, const char * from, const boo
                                     case 0x9f: *to++ = '"'; break;
                                     case 0xa0: *to++ = 'T'; break;
                                     case 0xa1: if (to < end-1) {*to++ = 'T'; *to++ = 'T';} else {*to = '\0'; return to;} break;
+                                    case 0xa2: *to++ = '*'; break;
                                     case 0xa4: *to++ = '.'; break;
                                     case 0xa5: if (to < end-1) {*to++ = '.'; *to++ = '.';} else {*to = '\0'; return to;} break;
                                     case 0xa6: if (to < end-2) {*to++ = '.'; *to++ = '.'; *to++ = '.';} else {*to = '\0'; return to;} break;
@@ -725,8 +726,9 @@ char* mrutils::copyToWindowsLatin1(char * to, const int sz, const char * from, c
                 }
             } else {
                 switch (c) {
-                    case 0xc2: 
+                    case 0xc2:
                         switch (c2) {
+                            case 0xa0: *to++ = '\xa0'; break;
                             case 0xa1: *to++ = '\xa1'; break;
                             case 0xa2: *to++ = '\xa2'; break;
                             case 0xa3: *to++ = '\xa3'; break;

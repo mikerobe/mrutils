@@ -83,6 +83,9 @@ class _API_ XWin {
             mrutils::mutexRelease(winMutex);
         }
 
+	public:
+		unsigned char exitKey; ///< key pressed that triggered an exit
+
     private:
         /**
           * This is for handling the user interaction

@@ -1,3 +1,3 @@
 #!/bin/bash
 
-command maketags > $HOME/.tags/cpp/mrutils
+command maketags > $HOME/.tags.local/cpp/mrutils

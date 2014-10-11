@@ -1,6 +1,8 @@
 #include "mr_sql.h"
-#include <pantheios/pantheios.hpp>
-#include <pantheios/inserters.hpp>
+#ifdef HAVE_PANTHEIOS
+	#include <pantheios/pantheios.hpp>
+	#include <pantheios/inserters.hpp>
+#endif
 
 #define SYNC_READ(n) \
 if (n != reader.read(n)) { \
@@ -94,10 +96,12 @@ int mrutils::Sql::syncFromDumpInsert(mrutils::BufferedReader& reader,
     ss << ")";
     if (!insert(ss.str().c_str(),&insertId))
     {
+		#ifdef HAVE_PANTHEIOS
         pantheios::logprintf(pantheios::error,
             "%s %s:%d SQL error [%s] on query: %s",
             __PRETTY_FUNCTION__, __FILE__, __LINE__,
             error, ss.str().c_str());
+		#endif
     }
 
     if (finish != NULL && !finish(reader, row))
@@ -397,8 +401,10 @@ bool mrutils::Sql::dumpTable(mrutils::BufferedWriter& out,
 {
     try
     {
+		#ifdef HAVE_PANTHEIOS
         pantheios::log(pantheios::debug,
             __PRETTY_FUNCTION__," table=", table);
+		#endif
 
         mrutils::stringstream ss;
 

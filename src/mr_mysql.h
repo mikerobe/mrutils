@@ -1,8 +1,10 @@
 #ifndef _MR_CPPLIB_MYSQL_H
 #define _MR_CPPLIB_MYSQL_H
 
-#include <pantheios/pantheios.hpp>
-#include <pantheios/inserters.hpp>
+#ifdef HAVE_PANTHEIOS
+	#include <pantheios/pantheios.hpp>
+	#include <pantheios/inserters.hpp>
+#endif
 
 #include "mr_exports.h"
 #include "mr_threads.h"
@@ -186,8 +188,10 @@ private:
 
         if (!reply.read(reader))
         {
+			#ifdef HAVE_PANTHEIOS
             pantheios::log(pantheios::notice,
                     "Mysql reconnecting to lost connection (dropped ping)...");
+			#endif
             // then re-connect
             return connect();
         }

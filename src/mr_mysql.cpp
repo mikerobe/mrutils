@@ -1,5 +1,7 @@
 #include "mr_mysql.h"
-#include <pantheios/pantheios.hpp>
+#ifdef HAVE_PANTHEIOS
+	#include <pantheios/pantheios.hpp>
+#endif
 //#define MR_SQL_DEBUG_2
 
 bool mrutils::Mysql::run_(const char * q) {
@@ -10,8 +12,10 @@ bool mrutils::Mysql::run_(const char * q) {
         return false;
     }
 
+	#ifdef HAVE_PANTHEIOS
     pantheios::logprintf(pantheios::debug,
         "SQL %d: rowNumber %d query.send(%s)\n",socket->s_,rowNumber,q);
+	#endif
 
     query.query = q;
     query.type  = mrutils::mysql::COM_QUERY;
@@ -29,22 +33,28 @@ bool mrutils::Mysql::run_(const char * q) {
 bool mrutils::Mysql::connect() {
     if (socket != NULL)
     {
+		#ifdef HAVE_PANTHEIOS
         pantheios::logprintf(pantheios::debug,
                 "Mysql %d is reconnecting...\n", socket->s_);
+		#endif
         delete socket, socket = NULL;
     } else
     {
+		#ifdef HAVE_PANTHEIOS
         pantheios::logprintf(pantheios::debug,
                 "New mysql is connecting...\n");
+		#endif
 
     }
 
     socket = new mrutils::Socket(server.c_str(),port,socketType);
 
     if (!socket->initClient(10)) {
+		#ifdef HAVE_PANTHEIOS
         pantheios::logprintf(pantheios::error,
                 "MySql unable to connect to server at %s:%d\n",
                 server.c_str(),(int)port);
+		#endif
         return false;
     }
 
@@ -76,10 +86,12 @@ bool mrutils::Mysql::connect() {
             errId = reply.data.err.errId;
             errStr = reply.data.err.message;
             error = errStr.c_str();
+			#ifdef HAVE_PANTHEIOS
             pantheios::logprintf(pantheios::error,
                     "MySql: login refused at %s:%d, username %s. %d:%s\n",
                     server.c_str(),(int)port,username.c_str(),errId,
                     reply.data.err.message);
+			#endif
             return false;
         case mrutils::mysql::MT_OK:
             break;
@@ -111,9 +123,11 @@ bool mrutils::Mysql::nextLine() {
             }
 
             #ifdef MR_SQL_DEBUG_2
+				#ifdef HAVE_PANTHEIOS
                 pantheios::logprintf(pantheios::debug,
                         "SQL %d result header: ", socket->s_);
                 reply.log(pantheios::debug);
+				#endif
             #endif
 
             switch (reply.type) {
@@ -152,9 +166,11 @@ bool mrutils::Mysql::nextLine() {
         }
 
         #ifdef MR_SQL_DEBUG_2
+			#ifdef HAVE_PANTHEIOS
             pantheios::logprintf(pantheios::debug,
                     "SQL %d result row %d: ", socket->s_, rowNumber);
             reply.log(pantheios::debug);
+			#endif
         #endif
 
         switch (reply.type) {
@@ -206,9 +222,11 @@ bool mrutils::Mysql::get(const char * q, int count, char type_, ...) {
         }
 
         #ifdef MR_SQL_DEBUG_2
+			#ifdef HAVE_PANTHEIOS
             pantheios::logprintf(pantheios::debug,
                     "SQL %d response to get: ", socket->s_);
             reply.log(pantheios::debug);
+			#endif
         #endif
 
         switch (reply.type) {
@@ -315,8 +333,10 @@ bool mrutils::Mysql::dumpTableDesc(const char * table,
         std::string * priName,
         const std::vector<std::string> * omitColumns)
 {
+	#ifdef HAVE_PANTHEIOS
     pantheios::log(pantheios::debug,
             __PRETTY_FUNCTION__," table=",table);
+	#endif
 
     mrutils::stringstream ss;
 

@@ -20,6 +20,9 @@ class _API_ XML {
         ~XML() { delete[] buffer; }
 
     public:
+		void reset()
+		{ tagPtr = eob = sob = buffer; }
+
         int get(mrutils::curl::urlRequest_t *request,
                 int stopFD = -1, bool checkRedir = true);
 

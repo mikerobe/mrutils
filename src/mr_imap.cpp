@@ -207,7 +207,12 @@ int mrutils::IMAP::login(char * buffer, _UNUSED int size) {
 
 bool mrutils::IMAP::addCert(const char * path) {
     std::ifstream in(path, std::ios::in);
-    ca_list.push_back(static_cast<std::stringstream const*>(&(std::stringstream() << in.rdbuf()))->str());
+
+    // ca_list.push_back(static_cast<std::stringstream const*>(&(std::stringstream() << in.rdbuf()))->str());
+	std::ostringstream ss;
+	ss << in.rdbuf();
+    ca_list.push_back(ss.str());
+
     return true;
 
     /*

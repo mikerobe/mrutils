@@ -3,8 +3,10 @@
     #include "mr_gzipreader.h"
 #endif
 
-#include <pantheios/pantheios.hpp>
-#include <pantheios/inserters.hpp>
+#ifdef HAVE_PANTHEIOS
+#	include <pantheios/pantheios.hpp>
+#	include <pantheios/inserters.hpp>
+#endif
 
 
 // minimum amt to read at end of buffer for nextLine
@@ -88,8 +90,10 @@ bool mrutils::BufferedReader::open(const char * const path_, bool clearData) {
     switch (type) {
         case FT_GZ:
             #ifndef OK_OUTSIDE_LIBS
-                pantheios::log(pantheios::critical,
-                    __PRETTY_FUNCTION__," gzip not supported");
+				#ifdef HAVE_PANTHEIOS
+					pantheios::log(pantheios::critical,
+						__PRETTY_FUNCTION__," gzip not supported");
+				#endif
                 type = FT_NONE;
                 return false;
             #else
@@ -136,8 +140,10 @@ bool mrutils::BufferedReader::suspend() {
             break;
     }
 
+	#ifdef HAVE_PANTHEIOS
     pantheios::log(pantheios::critical,
         __PRETTY_FUNCTION__," can't suspend receive type");
+	#endif
     return false;
 }
 
@@ -224,10 +230,12 @@ bool mrutils::BufferedReader::skipMore(int size) {
                 {
                     if (ret < 0)
                     {
+						#ifdef HAVE_PANTHEIOS
                         pantheios::logprintf(pantheios::error,
                                 "%s:%d socket read error %d (%s)",
                                 __FILE__, __LINE__, errno,
                                 strerror(errno));
+						#endif
                     }
 
                     // no more data
@@ -296,10 +304,12 @@ int mrutils::BufferedReader::nextLineSocketHelper(bool stripCR) {
         {
             if (ret < 0)
             {
+				#ifdef HAVE_PANTHEIOS
                 pantheios::logprintf(pantheios::error,
                         "%s:%d socket read error %d (%s)",
                         __FILE__, __LINE__, errno,
                         strerror(errno));
+				#endif
             }
 
             strlen = 0;
@@ -342,9 +352,11 @@ bool mrutils::BufferedReader::fetchNextLine(bool stripCR) {
 
             if (eob >= EOB)
             {
+				#ifdef HAVE_PANTHEIOS
                 pantheios::logprintf(pantheios::critical,
                         "%s %s:%d buffer overflow (eob>=EOB)",
                         __PRETTY_FUNCTION__,__FILE__,__LINE__);
+				#endif
                 strlen = 0; return false;
             } else {
                 if (eob == buffer) {
@@ -375,9 +387,11 @@ bool mrutils::BufferedReader::fetchNextLine(bool stripCR) {
 
                 // if here, found no \n in the whole buffer. then on last line
                 if (eob >= EOB) {
+					#ifdef HAVE_PANTHEIOS
                     pantheios::logprintf(pantheios::critical,
                             "%s %s:%d buffer overflow (eob>=EOB)",
                             __PRETTY_FUNCTION__,__FILE__,__LINE__);
+					#endif
                     strlen = 0; return false;
                 } else {
                     if (eob == buffer) {
@@ -406,9 +420,11 @@ bool mrutils::BufferedReader::fetchNextLine(bool stripCR) {
 
             // if here, found no \n in the whole buffer. then on last line
             if (eob >= EOB) {
+				#ifdef HAVE_PANTHEIOS
                 pantheios::logprintf(pantheios::critical,
                         "%s %s:%d buffer overflow (eob>=EOB)",
                         __PRETTY_FUNCTION__,__FILE__,__LINE__);
+				#endif
                 strlen = 0; return false;
             } else {
                 if (eob == buffer) {
@@ -435,9 +451,11 @@ bool mrutils::BufferedReader::fetchNextLine(bool stripCR) {
             ret = nextLineRecvHelper(stripCR);
             if (ret < 0) return false;
             if (ret > 0) return true;
+			#ifdef HAVE_PANTHEIOS
             pantheios::logprintf(pantheios::critical,
                     "%s %s:%d buffer overflow (eob>=EOB)",
                     __PRETTY_FUNCTION__,__FILE__,__LINE__);
+			#endif
             return false;
         } break;
 
@@ -455,9 +473,11 @@ bool mrutils::BufferedReader::fetchNextLine(bool stripCR) {
             ret = nextLineSocketHelper(stripCR);
             if (ret < 0) return false;
             if (ret > 0) return true;
+			#ifdef HAVE_PANTHEIOS
             pantheios::logprintf(pantheios::critical,
                     "%s %s:%d buffer overflow (eob>=EOB)",
                     __PRETTY_FUNCTION__,__FILE__,__LINE__);
+			#endif
             return false;
         } break;
     }
@@ -471,9 +491,11 @@ int mrutils::BufferedReader::readMore(int size)
     if (suspended_ && !resume()) return false;
     if (size > bufSize)
     {
+		#ifdef HAVE_PANTHEIOS
         pantheios::log(pantheios::error,
             __PRETTY_FUNCTION__, " can't read more than ",
             pantheios::integer(bufSize));
+		#endif
         return false;
     }
 
@@ -563,25 +585,31 @@ int mrutils::BufferedReader::readMore(int size)
                             {
                                 if (ret < 0)
                                 {
+									#ifdef HAVE_PANTHEIOS
                                     pantheios::logprintf(pantheios::error,
                                         "%s:%d %s",
                                         __FILE__, __LINE__, strerror(errno));
+									#endif
                                     return 0;
                                 }
                             } else
                             {
+								#ifdef HAVE_PANTHEIOS
                                 pantheios::log(pantheios::error,
                                         __FILE__, ": ", pantheios::integer(__LINE__),
                                         " select returned 0 with no wait...");
+								#endif
                                 return 0;
                             }
 
                             if (interruptFD >= 0 && FD_ISSET(interruptFD,&fds))
                             {
+								#ifdef HAVE_PANTHEIOS
                                 pantheios::log(pantheios::notice,
                                         __FILE__, ": ", pantheios::integer(__LINE__),
                                         " interrupted by interruptFD",
                                         pantheios::integer(interruptFD));
+								#endif
                                 return 0;
                             }
 
@@ -595,26 +623,32 @@ int mrutils::BufferedReader::readMore(int size)
                             {
                                 if (ret < 0)
                                 {
+									#ifdef HAVE_PANTHEIOS
                                     pantheios::log(pantheios::error,
                                         __FILE__, pantheios::integer(__LINE__),
                                         " ", strerror(errno));
+									#endif
                                     return 0;
                                 }
                             } else
                             {
+								#ifdef HAVE_PANTHEIOS
                                 pantheios::log(pantheios::error,
                                     __FILE__, pantheios::integer(__LINE__),
                                     " select timed out after ",
                                     pantheios::integer(waitSecs), "seconds");
+								#endif
                                 return 0;
                             }
 
                             if (interruptFD >= 0 && FD_ISSET(interruptFD,&fds))
                             {
+								#ifdef HAVE_PANTHEIOS
                                 pantheios::log(pantheios::notice,
                                         __FILE__, pantheios::integer(__LINE__),
                                         " interrupted by interruptFD",
                                         pantheios::integer(interruptFD));
+								#endif
                                 return 0;
                             }
 
@@ -623,13 +657,16 @@ int mrutils::BufferedReader::readMore(int size)
 
                         if (ret < 0)
                         {
+							#ifdef HAVE_PANTHEIOS
                             pantheios::log(pantheios::error,
                                 __FILE__, pantheios::integer(__LINE__),
                                 " ", strerror(errno));
+							#endif
                         }
 
                         if (ret == 0)
                         { // then peer has closed connection
+							#ifdef HAVE_PANTHEIOS
                             pantheios::log(pantheios::debug,
                                 __PRETTY_FUNCTION__,
                                 " recv disconnected with [",
@@ -638,6 +675,7 @@ int mrutils::BufferedReader::readMore(int size)
                                 pantheios::integer(targetEnd - eob),
                                 "] remaining to read of ",
                                 pantheios::integer(size));
+							#endif
                             line = pos;
                             size = eob - pos;
                             pos = eob;
@@ -646,19 +684,21 @@ int mrutils::BufferedReader::readMore(int size)
 
                         eob += ret;
 
+						#ifdef HAVE_PANTHEIOS
                         pantheios::log(pantheios::debug,
                             __PRETTY_FUNCTION__,
                             " got ", pantheios::integer(eob-pos),
                             "/", pantheios::integer(size));
+						#endif
                     } while (eob < targetEnd);
                 } break;
             }
 
-
-
+			#ifdef HAVE_PANTHEIOS
             pantheios::log(pantheios::debug,
                     __PRETTY_FUNCTION__,
                     " done getting ", pantheios::integer(size));
+			#endif
 
             line = pos; pos += size;
             return size;

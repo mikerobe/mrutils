@@ -1,6 +1,9 @@
 #ifndef _MR_IMAP_H
 #define _MR_IMAP_H
 
+#ifndef MR_GNUTLS
+#error Imap requires MR_GNUTLS
+#endif
 #include "mr_exports.h"
 #include "mr_sockets.h"
 #include "mr_bufferedreader.h"

@@ -53,6 +53,7 @@
     #include <dirent.h>
     #include <sys/stat.h>
     #include <sys/types.h>
+	#include <unistd.h>
 
     // this is for the file event monitor
     #if defined(__APPLE__)
